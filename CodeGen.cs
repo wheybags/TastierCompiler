@@ -57,31 +57,31 @@ public class InstructionWord {
   }
 
   public InstructionWord(Instruction op) {
-    this.operation == op;
-    this.label == null;
-    this.arg0 == null;
-    this.arg1 == null;
+    this.operation = op;
+    this.label = null;
+    this.arg0 = null;
+    this.arg1 = null;
   }
 
   public InstructionWord(Instruction op, string lab) {
-    this.operation == op;
-    this.label == lab;
-    this.arg0 == null;
-    this.arg1 == null;
+    this.operation = op;
+    this.label = lab;
+    this.arg0 = null;
+    this.arg1 = null;
   }
 
   public InstructionWord(Instruction op, string lab, int arg0) {
-    this.operation == op;
-    this.label == lab;
-    this.arg0 == arg0;
-    this.arg1 == null;
+    this.operation = op;
+    this.label = lab;
+    this.arg0 = arg0;
+    this.arg1 = null;
   }
 
   public InstructionWord(Instruction op, string lab, int arg0, int arg1) {
-    this.operation == op;
-    this.label == lab;
-    this.arg0 == arg0;
-    this.arg1 == arg1;
+    this.operation = op;
+    this.label = lab;
+    this.arg0 = arg0;
+    this.arg1 = arg1;
   }
 }
 
