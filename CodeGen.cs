@@ -18,7 +18,7 @@ public class InstructionWord {
 
   Instruction operation;  // the actual instruction
   string label;           // if the instruction has a label
-  InstructionKind kind;              // nullary, unary or binary instructions
+  InstructionKind kind;   // nullary, unary or binary instructions
   int arg0; int arg1;     // if the instruction has arguments
 
   public void put(List<string> output) {
@@ -70,14 +70,14 @@ public class InstructionWord {
 
   public InstructionWord(Instruction op, int arg0) {
     this.operation = op;
-    this.label = lab;
+    this.label = null;
     this.kind = InstructionKind.Unary;
     this.arg0 = arg0;
   }
 
   public InstructionWord(Instruction op, int arg0, int arg1) {
     this.operation = op;
-    this.label = lab;
+    this.label = null;
     this.kind = InstructionKind.Binary;
     this.arg0 = arg0;
     this.arg1 = arg1;

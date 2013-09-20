@@ -1,9 +1,15 @@
 COMPILER Tastier // DMA
 
-   public SymbolTable   tab;
-   public CodeGenerator gen;
+  public SymbolTable   tab;
+  public CodeGenerator gen;
+  int labelSeed;
+
+  string generateLabel() {
+    return "L" + labelSeed++;
+  }
 
 /*--------------------------------------------------------------------------*/
+
 CHARACTERS
 letter = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".
   digit = "0123456789".
@@ -21,152 +27,184 @@ COMMENTS FROM "//" TO lf
 IGNORE cr + lf + tab
 
 PRODUCTIONS
+
 /*------------------------------------------------------------------------*/
+
 AddOp<out InstructionWord inst>
 =                        (. inst = new InstructionWord(Instruction.ADD); .)
   ( '+'
   | '-'                  (. inst = new InstructionWord(Instruction.SUB); .)
   ).
+
 /*------------------------------------------------------------------------*/
-Expr<out int type>       (. int type1; InstructionWord inst; .)
+
+Expr<out TType type>      (. TType type1; InstructionWord inst; .)
 = SimExpr<out type>
   [ RelOp<out inst>
-    SimExpr<out type1>   (. if (type != type1) SemErr("incompatible types");
-                            gen.Emit(inst); type = boolean; .)
+    SimExpr<out type1>   (. if (type != type1) { SemErr("incompatible types"); }
+                            else { gen.Emit(inst); type = TType.Boolean; } .)
   ].
+
 /*------------------------------------------------------------------------*/
-Factor<out int type>     (. int n; Obj obj; string name; .)
-=                        (. type = undef; .)
+
+Factor<out TType type>    (. int n; Obj obj; string name; .)
+=                        (. type = TType.Undefined; .)
   ( Ident<out name>      (. obj = tab.Find(name); type = obj.type;
-                            if (obj.kind == var) {
-                               if (obj.level == 0) gen.Emit(Instruction.LOADG, obj.adr);
-//                                else gen.Emit(Instruction.LOAD, obj.adr);                            ***
-                                  else gen.Emit(Instruction.LOAD, tab.curLevel-obj.level, obj.adr); // DMA
+                            if (obj.kind == Kind.Variable) {
+                              if (obj.level == 0) {
+                                if (obj.address.kind == AddressKind.Direct) {
+                                  gen.Emit(new InstructionWord(Instruction.LOADG, obj.address.value_if_direct));
+                                } else { SemErr("cannot LOADG from a label"); }
+                              } else {
+                                if (obj.address.kind == AddressKind.Direct) {
+                                  gen.Emit(new InstructionWord(Instruction.LOAD, tab.currentLevel()-obj.level, obj.address.value_if_direct));
+                                } else SemErr("cannot LOAD from a label");
+                              }
                             } else SemErr("variable expected"); .)
   | number               (. n = Convert.ToInt32(t.val);
-                            gen.Emit(Instruction.CONST, n); type = integer; .)
+                            gen.Emit(new InstructionWord(Instruction.CONST, n)); type = TType.Integer; .)
   | '-'
-    Factor<out type>     (. if (type != integer) {
-                               SemErr("integer type expected"); type = integer;
+    Factor<out type>     (. if (type != TType.Integer) {
+                               SemErr("integer type expected"); type = TType.Integer;
                             }
-                            gen.Emit(Instruction.NEG); .)
-  | "true"               (. gen.Emit(Instruction.CONST, 1); type = boolean; .)
-  | "false"              (. gen.Emit(Instruction.CONST, 0); type = boolean; .)
+                            gen.Emit(new InstructionWord(Instruction.NEG)); .)
+  | "true"               (. gen.Emit(new InstructionWord(Instruction.CONST, 1)); type = TType.Boolean; .)
+  | "false"              (. gen.Emit(new InstructionWord(Instruction.CONST, 0)); type = TType.Boolean; .)
   ).
+
 /*------------------------------------------------------------------------*/
+
 Ident<out string name>
 = ident                  (. name = t.val; .).
+
 /*------------------------------------------------------------------------*/
+
 MulOp<out InstructionWord inst>
-=                        (. inst = Instruction.MUL; .)
+=                        (. inst = new InstructionWord(Instruction.MUL); .)
   ( '*'
-  | '/'                  (. inst = Instruction.DIV; .)
+  | '/'                  (. inst = new InstructionWord(Instruction.DIV); .)
   ).
+
 /*------------------------------------------------------------------------*/
-//ProcDecl               (. string name; Obj obj; int adr; .)                  ***
+
 ProcDecl                 (. string name; Obj obj; int adr, adr2; .)         // DMA
 = "void"
-  Ident<out name>        (. obj = tab.NewObj(name, proc, undef); obj.adr = gen.pc;
-//                          if (name == "Main") gen.progStart = gen.pc;        DMA
+  Ident<out name>        (. obj = tab.NewObj(name, Kind.Procedure, TType.Undefined);
+                            //obj.adr = gen.pc;
+
                             if (name == "Main") {                           // DMA
-                               obj.level= 0; gen.progStart = gen.pc;        // DMA
-                            }                                               // DMA
-                               else obj.level = tab.curLevel+1;             // DMA
+                               obj.level = 0;                               // DMA
+                            } else { obj.level = tab.currentLevel()+1; }          // DMA
                             tab.OpenScope(); .)
   '(' ')'
-  '{'                    (. gen.Emit(Instruction.ENTER, 0); adr = gen.pc - 2; .)
-//{ VarDecl | Stat }                                                           ***
-  { VarDecl | Stat |     (. gen.Emit(Instruction.JMP, 0); adr2 = gen.pc - 2; .)      // DMA
-    ProcDecl             (. gen.Patch(adr2, gen.pc); .)                     // DMA
+  '{'                    (. gen.Emit(new InstructionWord(Instruction.ENTER, 0)); .)
+
+  { VarDecl | Stat |     (. gen.Emit(new InstructionWord(Instruction.JMP, 0)); .)      // DMA
+    ProcDecl             //(. gen.Patch(adr2, gen.pc); .)
   }                                                                         // DMA
-  '}'                    (. gen.Emit(Instruction.LEAVE); gen.Emit(Instruction.RET);
-                            gen.Patch(adr, tab.topScope.nextAdr);
+  '}'                    (. gen.Emit(new InstructionWord(Instruction.LEAVE));
+                            gen.Emit(new InstructionWord(Instruction.RET));
+                            //gen.Patch(adr, tab.topScope.nextAdr);
                             tab.CloseScope(); .).
+
 /*------------------------------------------------------------------------*/
+
 RelOp<out InstructionWord inst>
-=                        (. inst = Instruction.EQU; .)
+=                        (. inst = new InstructionWord(Instruction.EQU); .)
   ( "=="
-  | '<'                  (. inst = Instruction.LSS; .)
-  | '>'                  (. inst = Instruction.GTR; .)
+  | '<'                  (. inst = new InstructionWord(Instruction.LSS); .)
+  | '>'                  (. inst = new InstructionWord(Instruction.GTR); .)
   ).
+
 /*------------------------------------------------------------------------*/
-SimExpr<out int type>    (. int type1; InstructionWord inst; .)
+
+SimExpr<out TType type>    (. TType type1; InstructionWord inst; .)
 = Term<out type>
   { AddOp<out inst>
-    Term<out type1>      (. if (type != integer || type1 != integer)
+    Term<out type1>      (. if (type != TType.Integer || type1 != TType.Integer)
                                SemErr("integer type expected");
                             gen.Emit(inst); .)
   }.
+
 /*------------------------------------------------------------------------*/
-Stat                     (. int type; string name; Obj obj;
+
+Stat                     (. TType type; string name; Obj obj;
                             int adr, adr2, loopstart; .)
 = Ident<out name>        (. obj = tab.Find(name); .)
-  ( '='                  (. if (obj.kind != var) SemErr("cannot assign to procedure"); .)
+  ( '='                  (. if (obj.kind != Kind.Variable) SemErr("cannot assign to non-variable"); .)
     Expr<out type> ';'
                          (. if (type != obj.type) SemErr("incompatible types");
-                            if (obj.level == 0) gen.Emit(Instruction.STOG, obj.adr);
-//                             else gen.Emit(Instruction.STO, obj.adr); .)                            ***
-                               else gen.Emit(Instruction.STO, tab.curLevel-obj.level, obj.adr); .) // DMA
-  | '(' ')' ';'          (. if (obj.kind != proc) SemErr("object is not a procedure");
-//                             gen.Emit(Instruction.CALL, obj.adr); .)                                ***
-                               gen.Emit(Instruction.CALL, obj.level-tab.curLevel, obj.adr); .)     // DMA
+                            if (obj.level == 0) gen.Emit(new InstructionWord(Instruction.STOG, obj.address.value_if_direct));
+                               else gen.Emit(new InstructionWord(Instruction.STO, tab.currentLevel()-obj.level, obj.address.value_if_direct)); .) // DMA
+  | '(' ')' ';'          (. if (obj.kind != Kind.Procedure) SemErr("object is not a procedure");
+                               gen.Emit(new InstructionWord(Instruction.CALL, obj.level-tab.currentLevel(), obj.address.value_if_direct)); .)     // DMA
   )
 
 | "if"
-  '(' Expr<out type> ')' (. if (type != boolean) SemErr("boolean type expected");
-                               gen.Emit(Instruction.FJMP, 0); adr = gen.pc - 2; .)
+  '(' Expr<out type> ')' (. if (type != TType.Boolean) SemErr("boolean type expected");
+                               gen.Emit(new InstructionWord(Instruction.FJMP, 0)); .)
       Stat
-      [ "else"           (. gen.Emit(Instruction.JMP, 0); adr2 = gen.pc - 2;
-                            gen.Patch(adr, gen.pc); adr = adr2; .)
+      [ "else"           (. gen.Emit(new InstructionWord(Instruction.JMP, 0));
+                            //gen.Patch(adr, gen.pc); adr = adr2;
+                          .)
         Stat
-      ]                  (. gen.Patch(adr, gen.pc); .)
+      ]                  (.
+                            //gen.Patch(adr, gen.pc);
+                          .)
 
-| "while"                (. loopstart = gen.pc; .)
-  '(' Expr<out type> ')' (. if (type != boolean) SemErr("boolean type expected");
-                               gen.Emit(Instruction.FJMP, 0); adr = gen.pc - 2; .)
-      Stat               (. gen.Emit(Instruction.JMP, loopstart); gen.Patch(adr, gen.pc); .)
+| "while"                (. /*loopstart = gen.pc;*/ .)
+  '(' Expr<out type> ')' (. if (type != TType.Boolean) SemErr("boolean type expected");
+                               gen.Emit(new InstructionWord(Instruction.FJMP, 0)); /*adr = gen.pc - 2;*/ .)
+      Stat               (. gen.Emit(new InstructionWord(Instruction.JMP, 0)); /*gen.Patch(adr, gen.pc);*/ .)
 
 | "read"
   Ident<out name> ';'    (. obj = tab.Find(name);
-                            if (obj.type != integer) SemErr("integer type expected");
-                               gen.Emit(Instruction.READ);
-                            if (obj.level == 0) gen.Emit(Instruction.STOG, obj.adr);
-//                             else gen.Emit(Instruction.STO, obj.adr); .)                            ***
-                               else gen.Emit(Instruction.STO, tab.curLevel-obj.level, obj.adr); .) // DMA
+                            if (obj.type != TType.Integer) SemErr("integer type expected");
+                               gen.Emit(new InstructionWord(Instruction.READ));
+                            if (obj.level == 0) gen.Emit(new InstructionWord(Instruction.STOG, obj.address.value_if_direct));
+                               else gen.Emit(new InstructionWord(Instruction.STO, tab.currentLevel()-obj.level, obj.address.value_if_direct)); .) // DMA
 
 | "write"
-  Expr<out type> ';'     (. if (type != integer) SemErr("integer type expected");
-                               gen.Emit(Instruction.WRITE); .)
+  Expr<out type> ';'     (. if (type != TType.Integer) SemErr("integer type expected");
+                               gen.Emit(new InstructionWord(Instruction.WRITE)); .)
 
 | '{' { Stat | VarDecl } '}' .
+
 /*------------------------------------------------------------------------*/
+
 Tastier                  (. string name; .) // DMA
 = "program"
   Ident<out name>        (. tab.OpenScope(); .)
   '{'
   { VarDecl | ProcDecl }
   '}'                    (. tab.CloseScope();
-                            if (gen.progStart == -1) SemErr("main function never defined");
+                            //if (gen.progStart == -1) SemErr("main function never defined");
                          .).
+
 /*------------------------------------------------------------------------*/
-Term<out int type>       (. int type1; InstructionWord inst; .)
+
+Term<out TType type>       (. TType type1; InstructionWord inst; .)
 = Factor<out type>
   { MulOp<out inst>
-    Factor<out type1>    (. if (type != integer || type1 != integer)
+    Factor<out type1>    (. if (type != TType.Integer || type1 != TType.Integer)
                                SemErr("integer type expected");
                             gen.Emit(inst); .)
   }.
+
 /*------------------------------------------------------------------------*/
-Type<out int type>
-=                        (. type = undef; .)
- ( "int"                 (. type = integer; .)
- | "bool"                (. type = boolean; .)
+
+TType<out TType type>
+=                        (. type = TType.Undefined; .)
+ ( "int"                 (. type = TType.Integer; .)
+ | "bool"                (. type = TType.Boolean; .)
  ).
+
 /*------------------------------------------------------------------------*/
-VarDecl                  (. string name; int type; .)
-= Type<out type>
-  Ident<out name>        (. tab.NewObj(name, var, type); .)
-  { ',' Ident<out name>  (. tab.NewObj(name, var, type); .)
+
+VarDecl                  (. string name; TType type; .)
+= TType<out type>
+  Ident<out name>        (. tab.NewObj(name, Kind.Variable, type); .)
+  { ',' Ident<out name>  (. tab.NewObj(name, Kind.Variable, type); .)
   } ';'.
 
 END Tastier. // DMA
