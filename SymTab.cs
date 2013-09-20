@@ -98,7 +98,7 @@ public class SymbolTable {
   }
 
   // create a new object node in the current scope
-  public Obj NewObj (string name, Obj.Kind kind, Obj.Type type) {
+  public Obj NewObj (string name, Kind kind, Type type) {
     currentScope = openScopes.Peek();
 
     //first check if the object has already been declared
