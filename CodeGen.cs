@@ -88,15 +88,19 @@ public class InstructionWord {
 
 public class CodeGenerator {
 
-   List<string> code;
+  List<string> code;
 
-   public void write(string filename) {
-      File.WriteAllLines(filename, code);
-   }
+  public void Write(string filename) {
+    File.WriteAllLines(filename, code);
+  }
 
-   public CodeGenerator() {
-      this.code = new List<string>();
-   }
+  public void Emit(InstructionWord inst) {
+    inst.put(code);
+  }
+
+  public CodeGenerator() {
+    this.code = new List<string>();
+  }
 }
 
 }
