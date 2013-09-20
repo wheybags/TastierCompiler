@@ -10,10 +10,15 @@ public enum Instruction {
  CALL, RET, ENTER, LEAVE, JMP, FJMP, READ, WRITE
 };
 
+public enum Kind {
+  Nullary, Unary, Binary
+};
+
 public class InstructionWord {
 
   Instruction operation;  // the actual instruction
   string label;           // if the instruction has a label
+  Kind kind;              // nullary, unary or binary instructions
   int arg0; int arg1;     // if the instruction has arguments
 
   public void put(List<string> output) {
@@ -46,11 +51,11 @@ public class InstructionWord {
       s = label + ": " + s;
     }
 
-    if (arg0 != null) {
+    if (kind = Kind.Unary || kind = Kind.Binary) {
       s += (" " + arg0);
     }
 
-    if (arg1 != null) {
+    if (kind = Kind.Binary) {
       s += (" " + arg1);
     }
 
@@ -60,27 +65,20 @@ public class InstructionWord {
   public InstructionWord(Instruction op) {
     this.operation = op;
     this.label = null;
-    this.arg0 = null;
-    this.arg1 = null;
+    this.kind = Kind.Nullary;
   }
 
-  public InstructionWord(Instruction op, string lab) {
+  public InstructionWord(Instruction op, int arg0) {
     this.operation = op;
     this.label = lab;
-    this.arg0 = null;
-    this.arg1 = null;
-  }
-
-  public InstructionWord(Instruction op, string lab, int arg0) {
-    this.operation = op;
-    this.label = lab;
+    this.kind = Kind.Unary;
     this.arg0 = arg0;
-    this.arg1 = null;
   }
 
-  public InstructionWord(Instruction op, string lab, int arg0, int arg1) {
+  public InstructionWord(Instruction op, int arg0, int arg1) {
     this.operation = op;
     this.label = lab;
+    this.kind = Kind.Binary;
     this.arg0 = arg0;
     this.arg1 = arg1;
   }

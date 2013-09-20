@@ -12,7 +12,7 @@ class Tastier { // DMA
       parser.gen = new CodeGenerator();
       parser.Parse();
       if (parser.errors.count == 0) {
-        parser.gen.write("test.asm");
+        parser.gen.Write("test.asm");
       }
     } else Console.WriteLine("-- No source file specified");
   }
