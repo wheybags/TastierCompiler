@@ -51,11 +51,11 @@ public class InstructionWord {
       s = label + ": " + s;
     }
 
-    if (kind = InstructionKind.Unary || kind = InstructionKind.Binary) {
+    if (kind == InstructionKind.Unary || kind == InstructionKind.Binary) {
       s += (" " + arg0);
     }
 
-    if (kind = InstructionKind.Binary) {
+    if (kind == InstructionKind.Binary) {
       s += (" " + arg1);
     }
 
