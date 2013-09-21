@@ -6,7 +6,7 @@ namespace Tastier {
 public enum TType { // types
   Undefined,
   Integer,
-  Boolean
+  Bool
 };
 
 public enum Kind {
@@ -26,14 +26,14 @@ public class Address {
   public string value_if_label;
   public AddressKind kind;
 
-  public Address labelAddress(string value) {
+  public static Address labelAddress(string value) {
     Address adr = new Address();
     adr.kind = AddressKind.Label;
     adr.value_if_label = value;
     return adr;
   }
 
-  public Address directAddress(int value) {
+  public static Address directAddress(int value) {
     Address adr = new Address();
     adr.kind = AddressKind.Direct;
     adr.value_if_direct = value;
@@ -50,7 +50,7 @@ public class Obj {      // object describing a declared name
   public Address address;     // address in memory or start of proc
   public int level;           // nesting level
 
-  public Obj(string name, TType type, Kind kind, Address address, int level ) {
+  public Obj(string name, TType type, Kind kind, int level ) {
     this.name = name;
     this.type = type;
     this.kind = kind;
@@ -94,7 +94,7 @@ public class SymbolTable {
 
   // create a new object node in the current scope
   public Obj NewObj (string name, Kind kind, TType type) {
-    currentScope = openScopes.Peek();
+    Scope currentScope = openScopes.Peek();
 
     //first check if the object has already been declared
     foreach (Obj o in currentScope.localObjects) {
@@ -109,7 +109,7 @@ public class SymbolTable {
       currentScope.nextFreeAddress += 1;
     }
 
-    currentScope.locals.Add(obj);
+    currentScope.localObjects.Add(obj);
     return obj;
   }
 

@@ -42,7 +42,7 @@ Expr<out TType type>      (. TType type1; InstructionWord inst; .)
 = SimExpr<out type>
   [ RelOp<out inst>
     SimExpr<out type1>   (. if (type != type1) { SemErr("incompatible types"); }
-                            else { gen.Emit(inst); type = TType.Boolean; } .)
+                            else { gen.Emit(inst); type = TType.Bool; } .)
   ].
 
 /*------------------------------------------------------------------------*/
@@ -68,8 +68,8 @@ Factor<out TType type>    (. int n; Obj obj; string name; .)
                                SemErr("integer type expected"); type = TType.Integer;
                             }
                             gen.Emit(new InstructionWord(Instruction.NEG)); .)
-  | "true"               (. gen.Emit(new InstructionWord(Instruction.CONST, 1)); type = TType.Boolean; .)
-  | "false"              (. gen.Emit(new InstructionWord(Instruction.CONST, 0)); type = TType.Boolean; .)
+  | "true"               (. gen.Emit(new InstructionWord(Instruction.CONST, 1)); type = TType.Bool; .)
+  | "false"              (. gen.Emit(new InstructionWord(Instruction.CONST, 0)); type = TType.Bool; .)
   ).
 
 /*------------------------------------------------------------------------*/
@@ -141,7 +141,7 @@ Stat                     (. TType type; string name; Obj obj;
   )
 
 | "if"
-  '(' Expr<out type> ')' (. if (type != TType.Boolean) SemErr("boolean type expected");
+  '(' Expr<out type> ')' (. if (type != TType.Bool) SemErr("boolean type expected");
                                gen.Emit(new InstructionWord(Instruction.FJMP, 0)); .)
       Stat
       [ "else"           (. gen.Emit(new InstructionWord(Instruction.JMP, 0));
@@ -153,7 +153,7 @@ Stat                     (. TType type; string name; Obj obj;
                           .)
 
 | "while"                (. /*loopstart = gen.pc;*/ .)
-  '(' Expr<out type> ')' (. if (type != TType.Boolean) SemErr("boolean type expected");
+  '(' Expr<out type> ')' (. if (type != TType.Bool) SemErr("boolean type expected");
                                gen.Emit(new InstructionWord(Instruction.FJMP, 0)); /*adr = gen.pc - 2;*/ .)
       Stat               (. gen.Emit(new InstructionWord(Instruction.JMP, 0)); /*gen.Patch(adr, gen.pc);*/ .)
 
@@ -193,16 +193,16 @@ Term<out TType type>       (. TType type1; InstructionWord inst; .)
 
 /*------------------------------------------------------------------------*/
 
-TType<out TType type>
+Type<out TType type>
 =                        (. type = TType.Undefined; .)
  ( "int"                 (. type = TType.Integer; .)
- | "bool"                (. type = TType.Boolean; .)
+ | "bool"                (. type = TType.Bool; .)
  ).
 
 /*------------------------------------------------------------------------*/
 
 VarDecl                  (. string name; TType type; .)
-= TType<out type>
+= Type<out type>
   Ident<out name>        (. tab.NewObj(name, Kind.Variable, type); .)
   { ',' Ident<out name>  (. tab.NewObj(name, Kind.Variable, type); .)
   } ';'.

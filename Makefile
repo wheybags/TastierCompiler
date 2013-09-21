@@ -1,7 +1,8 @@
 all:
-	cococs Tastier.ATG -namespace Tastier
-	mono-csc Tastier.cs Scanner.cs Parser.cs SymTab.cs CodeGen.cs
+	mkdir -p Generated
+	cococs -frames Frames -o Generated -namespace Tastier Grammar/Tastier.ATG
+	mono-csc Code/*.cs Generated/*.cs
 
 clean:
-	rm -f *.exe *.old
-	rm -f Parser.cs Scanner.cs
+	rm -f *.exe 
+	rm -rf Generated/*

@@ -89,7 +89,7 @@ public class CodeGenerator {
   List<string> code;
 
   public void Write(string filename) {
-    File.WriteAllLines(filename, code);
+    File.WriteAllLines(filename, code.ToArray());
   }
 
   public void Emit(InstructionWord inst) {
