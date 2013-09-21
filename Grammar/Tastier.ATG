@@ -1,12 +1,133 @@
 COMPILER Tastier // DMA
 
-  public SymbolTable   tab;
-  public CodeGenerator gen;
-  int labelSeed;
+using System.Collections.Generic;
 
-  string generateLabel() {
-    return "L" + labelSeed++;
+// First, let's declare all the types we're going to use
+
+enum TastierType {   // types for variables
+  Undefined,
+  Integer,
+  Boolean
+};
+
+enum TastierKind {  // kinds of symbol
+  Var,
+  Proc
+};
+
+using Symbol = Tuple<string, TastierKind, TastierType>;
+
+/*
+  A Symbol is a name with a type and a kind. We'll use these to represent
+  declared names in the program. For each Symbol which is a variable, we
+  have to allocate some storage, so the variable lives at some address in
+  memory. Procedures, on the other hand, are just sets of instructions. A
+  procedure is not data, so it isn't stored on the stack or in memory, but
+  is just a particular part of the list of instructions in the program being
+  compiled. When the program is being run, the code will be loaded into the
+  machine's instruction memory, and the procedure will have an address
+  there. However, it's easier for us to just give the procedure a unique
+  label, instead of remembering what address it lives at. The assembler will
+  take care of converting the label into an address when it encounters a
+  JMP, FJMP or CALL instruction with that label as a target.
+*/
+
+using Scope = Stack<Symbol>;
+
+/*
+  A scope contains a stack of symbol definitions. Every time we come across
+  a new local variable declaration, we can just push it onto the stack. We'll
+  use the position of the variable in the stack to represent its address in
+  the stack frame of the procedure in which it is defined. In other words, the
+  variable at the bottom of the stack goes at location 0 in the stack frame,
+  the next variable at location 1, and so on.
+*/
+
+using Instruction = Tuple<string, string>;
+using Program = List<Instruction>;
+
+*/
+  A program is just a list of instructions. When the program is loaded into
+  the machine's instruction memory, the instructions will be laid out in the
+  same order that they appear in this list. Because of this, we can use the
+  location of an instruction in the list as its address in instruction memory.
+  Labels are just names for particular locations in the list of instructions
+  that make up the program.
+
+  The first component of all instructions is a label, which can be empty.
+  The second component is the actual instruction itself.
+*/
+
+Stack<Scope> openScopes = new Stack<Scope>();
+
+/*
+  Every time we encounter a new procedure declaration in the program, we want
+  to make sure that expressions inside the procedure see all of the variables
+  that were in scope at the point where the procedure was defined. We also
+  want to make sure that expressions outside the procedure do not see the
+  procedure's local variables. Every time we encounter a procedure, we'll push
+  a new scope on the stack of open scopes. When the procedure ends, we can pop
+  it off and continue, knowing that the local variables defined in the
+  procedure cannot be seen outside, since we've popped the scope which
+  contains them off the stack.
+*/
+
+Program program = new Program();
+Stack<Label> openLabels = newStack<Label>();
+
+/*
+  Sometimes, we need to jump over a block of code which we're about to
+  generate (for example, at the start of a loop, if the test fails, we have
+  to jump to the end of the loop). Because it hasn't been generated yet, we
+  don't know how long it will be (in the case of the loop, we don't know how
+  many instructions will be in the loop body until we actually generate the
+  code, and count them). In this case, we can make up a new label for "the
+  end of the loop" and emit a jump to that label. When we get to the end of
+  the loop, we can put the label in, so that the jump will go to the
+  labelled location. Since we can have loops within loops, we need to keep
+  track of which label is the one that we are currently trying to jump to,
+  and we need to make sure they go in the right order. We'll use a stack to
+  store the labels for all of the forward jumps which are active. Every time
+  we need to do a forward jump, we'll generate a label, emit a jump to that
+  label, and push it on the stack. When we get to the end of the loop, we'll
+  put the label in, and pop it off the stack.
+*/
+
+using StackAddress = Tuple<int, int>;
+
+/*
+  The address of a variable on the stack at runtime has two components. The
+  first component is which stack frame it's in, relative to the current
+  procedure. If the variable is declared in the procedure that's currently
+  executing, then it will be in that procedure's stack frame. If it's declared
+  in the procedure that called the currently active one, then it'll be in the
+  caller's stack frame, and so on. The first component is the offset that says
+  how many frames up the chain of procedure calls to look for the variable.
+  The second component is simply the location of the variable in the stack
+  frame where it lives.
+*/
+
+Tuple<Symbol, StackAddress> lookup(Stack<Scope> scopes, string name) {
+  int stackFrameOffset = 0;
+  int variableOffset = 0;
+
+  foreach (Scope scope in scopes) {
+    foreach (Symbol s in scope) {
+      if (s.Item1 == name) {
+        StackAddress addr = new StackAddress(stackFrameOffset, variableOffset);
+        return new Tuple<Symbol, StackAddress>(s, addr);
+      }
+      else {
+        variableOffset += 1;
+      }
+    }
+    else {
+      stackFrameOffset += 1;
+      variableOffset = 0;
+    }
   }
+  return null; // if the name wasn't found in any open scopes.
+}
 
 /*--------------------------------------------------------------------------*/
 
@@ -30,46 +151,49 @@ PRODUCTIONS
 
 /*------------------------------------------------------------------------*/
 
-AddOp<out InstructionWord inst>
-=                        (. inst = new InstructionWord(Instruction.ADD); .)
+AddOp<out Instruction inst>
+=                        (. inst = "Add"; .)
   ( '+'
-  | '-'                  (. inst = new InstructionWord(Instruction.SUB); .)
+  | '-'                  (. inst = "Sub"; .)
   ).
 
 /*------------------------------------------------------------------------*/
 
-Expr<out TType type>      (. TType type1; InstructionWord inst; .)
+Expr<out TastierType type>      (. TastierType type1; Instruction inst; .)
 = SimExpr<out type>
   [ RelOp<out inst>
     SimExpr<out type1>   (. if (type != type1) { SemErr("incompatible types"); }
-                            else { gen.Emit(inst); type = TType.Bool; } .)
+                            else { program.Add(inst); type = TastierType.Bool; } .)
   ].
 
 /*------------------------------------------------------------------------*/
 
-Factor<out TType type>    (. int n; Obj obj; string name; .)
-=                        (. type = TType.Undefined; .)
-  ( Ident<out name>      (. obj = tab.Find(name); type = obj.type;
-                            if (obj.kind == Kind.Variable) {
-                              if (obj.level == 0) {
-                                if (obj.address.kind == AddressKind.Direct) {
-                                  gen.Emit(new InstructionWord(Instruction.LOADG, obj.address.value_if_direct));
-                                } else { SemErr("cannot LOADG from a label"); }
-                              } else {
-                                if (obj.address.kind == AddressKind.Direct) {
-                                  gen.Emit(new InstructionWord(Instruction.LOAD, tab.currentLevel()-obj.level, obj.address.value_if_direct));
-                                } else SemErr("cannot LOAD from a label");
-                              }
-                            } else SemErr("variable expected"); .)
+Factor<out TastierType type>    (. int n; Tuple<Symbol, StackAddress> result; string name; .)
+=                        (. type = TastierType.Undefined; .)
+  ( Ident<out name>      (. result = lookup(openScopes, name);
+                            if (result == null) {
+                              SemErr("reference to undefined variable " + name);
+                            } else {
+                              type = result.Item1.Item3;
+                              if (result.Item1.Item2 == Kind.Var) {
+                                if (result.Item2.Item1 == 0) {
+                                    program.Add(new Instruction("", "LoadG " + result.Item2.Item2);
+                                } else {
+                                  if (obj.address.kind == AddressKind.Direct) {
+                                    gen.Emit(new Instruction(Instruction.LOAD, tab.currentLevel()-obj.level, obj.address.value_if_direct));
+                                  } else SemErr("cannot LOAD from a label");
+                                }
+                              } else SemErr("variable expected");
+                            }.)
   | number               (. n = Convert.ToInt32(t.val);
-                            gen.Emit(new InstructionWord(Instruction.CONST, n)); type = TType.Integer; .)
+                            gen.Emit(new Instruction(Instruction.CONST, n)); type = TastierType.Integer; .)
   | '-'
-    Factor<out type>     (. if (type != TType.Integer) {
-                               SemErr("integer type expected"); type = TType.Integer;
+    Factor<out type>     (. if (type != TastierType.Integer) {
+                               SemErr("integer type expected"); type = TastierType.Integer;
                             }
-                            gen.Emit(new InstructionWord(Instruction.NEG)); .)
-  | "true"               (. gen.Emit(new InstructionWord(Instruction.CONST, 1)); type = TType.Bool; .)
-  | "false"              (. gen.Emit(new InstructionWord(Instruction.CONST, 0)); type = TType.Bool; .)
+                            gen.Emit(new Instruction(Instruction.NEG)); .)
+  | "true"               (. gen.Emit(new Instruction(Instruction.CONST, 1)); type = TastierType.Bool; .)
+  | "false"              (. gen.Emit(new Instruction(Instruction.CONST, 0)); type = TastierType.Bool; .)
   ).
 
 /*------------------------------------------------------------------------*/
@@ -79,17 +203,17 @@ Ident<out string name>
 
 /*------------------------------------------------------------------------*/
 
-MulOp<out InstructionWord inst>
-=                        (. inst = new InstructionWord(Instruction.MUL); .)
+MulOp<out Instruction inst>
+=                        (. inst = new Instruction(Instruction.MUL); .)
   ( '*'
-  | '/'                  (. inst = new InstructionWord(Instruction.DIV); .)
+  | '/'                  (. inst = new Instruction(Instruction.DIV); .)
   ).
 
 /*------------------------------------------------------------------------*/
 
 ProcDecl                 (. string name; Obj obj; int adr, adr2; .)         // DMA
 = "void"
-  Ident<out name>        (. obj = tab.NewObj(name, Kind.Procedure, TType.Undefined);
+  Ident<out name>        (. obj = tab.NewObj(name, Kind.Procedure, TastierType.Undefined);
                             //obj.adr = gen.pc;
 
                             if (name == "Main") {                           // DMA
@@ -97,54 +221,54 @@ ProcDecl                 (. string name; Obj obj; int adr, adr2; .)         // D
                             } else { obj.level = tab.currentLevel()+1; }          // DMA
                             tab.OpenScope(); .)
   '(' ')'
-  '{'                    (. gen.Emit(new InstructionWord(Instruction.ENTER, 0)); .)
+  '{'                    (. gen.Emit(new Instruction(Instruction.ENTER, 0)); .)
 
-  { VarDecl | Stat |     (. gen.Emit(new InstructionWord(Instruction.JMP, 0)); .)      // DMA
+  { VarDecl | Stat |     (. gen.Emit(new Instruction(Instruction.JMP, 0)); .)      // DMA
     ProcDecl             //(. gen.Patch(adr2, gen.pc); .)
   }                                                                         // DMA
-  '}'                    (. gen.Emit(new InstructionWord(Instruction.LEAVE));
-                            gen.Emit(new InstructionWord(Instruction.RET));
+  '}'                    (. gen.Emit(new Instruction(Instruction.LEAVE));
+                            gen.Emit(new Instruction(Instruction.RET));
                             //gen.Patch(adr, tab.topScope.nextAdr);
                             tab.CloseScope(); .).
 
 /*------------------------------------------------------------------------*/
 
-RelOp<out InstructionWord inst>
-=                        (. inst = new InstructionWord(Instruction.EQU); .)
+RelOp<out Instruction inst>
+=                        (. inst = new Instruction(Instruction.EQU); .)
   ( "=="
-  | '<'                  (. inst = new InstructionWord(Instruction.LSS); .)
-  | '>'                  (. inst = new InstructionWord(Instruction.GTR); .)
+  | '<'                  (. inst = new Instruction(Instruction.LSS); .)
+  | '>'                  (. inst = new Instruction(Instruction.GTR); .)
   ).
 
 /*------------------------------------------------------------------------*/
 
-SimExpr<out TType type>    (. TType type1; InstructionWord inst; .)
+SimExpr<out TastierType type>    (. TastierType type1; Instruction inst; .)
 = Term<out type>
   { AddOp<out inst>
-    Term<out type1>      (. if (type != TType.Integer || type1 != TType.Integer)
+    Term<out type1>      (. if (type != TastierType.Integer || type1 != TastierType.Integer)
                                SemErr("integer type expected");
                             gen.Emit(inst); .)
   }.
 
 /*------------------------------------------------------------------------*/
 
-Stat                     (. TType type; string name; Obj obj;
+Stat                     (. TastierType type; string name; Obj obj;
                             int adr, adr2, loopstart; .)
 = Ident<out name>        (. obj = tab.Find(name); .)
   ( '='                  (. if (obj.kind != Kind.Variable) SemErr("cannot assign to non-variable"); .)
     Expr<out type> ';'
                          (. if (type != obj.type) SemErr("incompatible types");
-                            if (obj.level == 0) gen.Emit(new InstructionWord(Instruction.STOG, obj.address.value_if_direct));
-                               else gen.Emit(new InstructionWord(Instruction.STO, tab.currentLevel()-obj.level, obj.address.value_if_direct)); .) // DMA
+                            if (obj.level == 0) gen.Emit(new Instruction(Instruction.STOG, obj.address.value_if_direct));
+                               else gen.Emit(new Instruction(Instruction.STO, tab.currentLevel()-obj.level, obj.address.value_if_direct)); .) // DMA
   | '(' ')' ';'          (. if (obj.kind != Kind.Procedure) SemErr("object is not a procedure");
-                               gen.Emit(new InstructionWord(Instruction.CALL, obj.level-tab.currentLevel(), obj.address.value_if_direct)); .)     // DMA
+                               gen.Emit(new Instruction(Instruction.CALL, obj.level-tab.currentLevel(), obj.address.value_if_direct)); .)     // DMA
   )
 
 | "if"
-  '(' Expr<out type> ')' (. if (type != TType.Bool) SemErr("boolean type expected");
-                               gen.Emit(new InstructionWord(Instruction.FJMP, 0)); .)
+  '(' Expr<out type> ')' (. if (type != TastierType.Bool) SemErr("boolean type expected");
+                               gen.Emit(new Instruction(Instruction.FJMP, 0)); .)
       Stat
-      [ "else"           (. gen.Emit(new InstructionWord(Instruction.JMP, 0));
+      [ "else"           (. gen.Emit(new Instruction(Instruction.JMP, 0));
                             //gen.Patch(adr, gen.pc); adr = adr2;
                           .)
         Stat
@@ -153,20 +277,20 @@ Stat                     (. TType type; string name; Obj obj;
                           .)
 
 | "while"                (. /*loopstart = gen.pc;*/ .)
-  '(' Expr<out type> ')' (. if (type != TType.Bool) SemErr("boolean type expected");
-                               gen.Emit(new InstructionWord(Instruction.FJMP, 0)); /*adr = gen.pc - 2;*/ .)
-      Stat               (. gen.Emit(new InstructionWord(Instruction.JMP, 0)); /*gen.Patch(adr, gen.pc);*/ .)
+  '(' Expr<out type> ')' (. if (type != TastierType.Bool) SemErr("boolean type expected");
+                               gen.Emit(new Instruction(Instruction.FJMP, 0)); /*adr = gen.pc - 2;*/ .)
+      Stat               (. gen.Emit(new Instruction(Instruction.JMP, 0)); /*gen.Patch(adr, gen.pc);*/ .)
 
 | "read"
   Ident<out name> ';'    (. obj = tab.Find(name);
-                            if (obj.type != TType.Integer) SemErr("integer type expected");
-                               gen.Emit(new InstructionWord(Instruction.READ));
-                            if (obj.level == 0) gen.Emit(new InstructionWord(Instruction.STOG, obj.address.value_if_direct));
-                               else gen.Emit(new InstructionWord(Instruction.STO, tab.currentLevel()-obj.level, obj.address.value_if_direct)); .) // DMA
+                            if (obj.type != TastierType.Integer) SemErr("integer type expected");
+                               gen.Emit(new Instruction(Instruction.READ));
+                            if (obj.level == 0) gen.Emit(new Instruction(Instruction.STOG, obj.address.value_if_direct));
+                               else gen.Emit(new Instruction(Instruction.STO, tab.currentLevel()-obj.level, obj.address.value_if_direct)); .) // DMA
 
 | "write"
-  Expr<out type> ';'     (. if (type != TType.Integer) SemErr("integer type expected");
-                               gen.Emit(new InstructionWord(Instruction.WRITE)); .)
+  Expr<out type> ';'     (. if (type != TastierType.Integer) SemErr("integer type expected");
+                               gen.Emit(new Instruction(Instruction.WRITE)); .)
 
 | '{' { Stat | VarDecl } '}' .
 
@@ -183,25 +307,25 @@ Tastier                  (. string name; .) // DMA
 
 /*------------------------------------------------------------------------*/
 
-Term<out TType type>       (. TType type1; InstructionWord inst; .)
+Term<out TastierType type>       (. TastierType type1; Instruction inst; .)
 = Factor<out type>
   { MulOp<out inst>
-    Factor<out type1>    (. if (type != TType.Integer || type1 != TType.Integer)
+    Factor<out type1>    (. if (type != TastierType.Integer || type1 != TastierType.Integer)
                                SemErr("integer type expected");
                             gen.Emit(inst); .)
   }.
 
 /*------------------------------------------------------------------------*/
 
-Type<out TType type>
-=                        (. type = TType.Undefined; .)
- ( "int"                 (. type = TType.Integer; .)
- | "bool"                (. type = TType.Bool; .)
+Type<out TastierType type>
+=                        (. type = TastierType.Undefined; .)
+ ( "int"                 (. type = TastierType.Integer; .)
+ | "bool"                (. type = TastierType.Bool; .)
  ).
 
 /*------------------------------------------------------------------------*/
 
-VarDecl                  (. string name; TType type; .)
+VarDecl                  (. string name; TastierType type; .)
 = Type<out type>
   Ident<out name>        (. tab.NewObj(name, Kind.Variable, type); .)
   { ',' Ident<out name>  (. tab.NewObj(name, Kind.Variable, type); .)
