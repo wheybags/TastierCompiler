@@ -2,7 +2,7 @@ using System;
 
 namespace Tastier { // DMA
 
-class Main { // DMA
+class Tastier { // DMA
 
   public static void Main (string[] arg) {
     if (arg.Length > 0) {

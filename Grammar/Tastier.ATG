@@ -1,7 +1,5 @@
 COMPILER Tastier // DMA
 
-using System.Collections.Generic;
-
 // First, let's declare all the types we're going to use
 
 enum TastierType {   // types for variables
@@ -15,7 +13,13 @@ enum TastierKind {  // kinds of symbol
   Proc
 };
 
-using Symbol = Tuple<string, TastierKind, TastierType>;
+/*
+  Because of how Coco/R generates a program from this grammar file, we can't
+  put type aliases like the one just below in this file. These aliases are
+  actually declared in Parser.frame, but the documentation is here.
+*/
+
+//using Symbol = Tuple<string, TastierKind, TastierType>;
 
 /*
   A Symbol is a name with a type and a kind. We'll use these to represent
@@ -32,7 +36,7 @@ using Symbol = Tuple<string, TastierKind, TastierType>;
   JMP, FJMP or CALL instruction with that label as a target.
 */
 
-using Scope = Stack<Symbol>;
+//using Scope = Stack<Symbol>;
 
 /*
   A scope contains a stack of symbol definitions. Every time we come across
@@ -43,10 +47,10 @@ using Scope = Stack<Symbol>;
   the next variable at location 1, and so on.
 */
 
-using Instruction = Tuple<string, string>;
-using Program = List<Instruction>;
+//using Instruction = Tuple<string, string>;
+//using Program = List<Instruction>;
 
-*/
+/*
   A program is just a list of instructions. When the program is loaded into
   the machine's instruction memory, the instructions will be laid out in the
   same order that they appear in this list. Because of this, we can use the
@@ -73,7 +77,7 @@ Stack<Scope> openScopes = new Stack<Scope>();
 */
 
 Program program = new Program();
-Stack<Label> openLabels = newStack<Label>();
+Stack<Label> openLabels = new Stack<Label>();
 
 /*
   Sometimes, we need to jump over a block of code which we're about to
@@ -93,7 +97,7 @@ Stack<Label> openLabels = newStack<Label>();
   put the label in, and pop it off the stack.
 */
 
-using StackAddress = Tuple<int, int>;
+//using StackAddress = Tuple<int, int>;
 
 /*
   The address of a variable on the stack at runtime has two components. The
@@ -121,10 +125,8 @@ Tuple<Symbol, StackAddress> lookup(Stack<Scope> scopes, string name) {
         variableOffset += 1;
       }
     }
-    else {
-      stackFrameOffset += 1;
-      variableOffset = 0;
-    }
+    stackFrameOffset += 1;
+    variableOffset = 0;
   }
   return null; // if the name wasn't found in any open scopes.
 }
@@ -177,7 +179,7 @@ Factor<out TastierType type>    (. int n; Tuple<Symbol, StackAddress> result; st
                               type = result.Item1.Item3;
                               if (result.Item1.Item2 == Kind.Var) {
                                 if (result.Item2.Item1 == 0) {
-                                    program.Add(new Instruction("", "LoadG " + result.Item2.Item2);
+                                    program.Add(new Instruction("", "LoadG " + result.Item2.Item2));
                                 } else {
                                   if (obj.address.kind == AddressKind.Direct) {
                                     gen.Emit(new Instruction(Instruction.LOAD, tab.currentLevel()-obj.level, obj.address.value_if_direct));

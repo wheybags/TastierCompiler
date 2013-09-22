@@ -4,5 +4,5 @@ all:
 	mono-csc Main.cs Generated/*.cs -out:Tastier.exe
 
 clean:
-	rm -f *.exe 
+	rm -f *.exe
 	rm -rf Generated/*
