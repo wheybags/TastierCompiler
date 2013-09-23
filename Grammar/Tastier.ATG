@@ -193,8 +193,14 @@ AddOp<out Instruction inst>
 Expr<out TastierType type>      (.  TastierType type1; Instruction inst; .)
 = SimExpr<out type>
   [ RelOp<out inst>
-    SimExpr<out type1>          (.  if (type != type1) { SemErr("incompatible types"); }
-                                    else { program.Add(inst); type = TastierType.Boolean; } .)
+    SimExpr<out type1>          (.  if (type != type1) {
+                                      SemErr("incompatible types");
+                                    }
+                                    else {
+                                      program.Add(inst);
+                                      type = TastierType.Boolean;
+                                    }
+                                .)
   ].
 
 /*------------------------------------------------------------------------*/
@@ -203,7 +209,9 @@ Factor<out TastierType type>    (.  int n; Symbol sym; string name; .)
 =                               (.  type = TastierType.Undefined; .)
   ( Ident<out name>             (.
                                     sym = lookup(openScopes, name);
-                                    if (sym == null) { SemErr("reference to undefined variable " + name);}
+                                    if (sym == null) {
+                                      SemErr("reference to undefined variable " + name);
+                                    }
                                     else {
                                       type = (TastierType)sym.Item3;
                                       if ((TastierKind)sym.Item2 == TastierKind.Var) {
@@ -325,12 +333,14 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
   )
 
 | "if"
-  '(' Expr<out type> ')'        (.  if ((TastierType)type != TastierType.Boolean) {
+  '(' Expr<out type> ')'        (.
+                                    if ((TastierType)type != TastierType.Boolean) {
                                       SemErr("boolean type expected");
                                     }
                                     program.Add(new Instruction("", "FJmp " + 0)); .)
       Stat
-      [ "else"                  (.  program.Add(new Instruction("", "Jmp " + 0));
+      [ "else"                  (.
+                                    program.Add(new Instruction("", "Jmp " + 0));
                                     //gen.Patch(adr, gen.pc); adr = adr2;
                                 .)
         Stat
@@ -339,8 +349,12 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                 .)
 
 | "while"                       (.  /*loopstart = gen.pc;*/ .)
-  '(' Expr<out type> ')'        (.  if ((TastierType)type != TastierType.Boolean) SemErr("boolean type expected");
-                                        program.Add(new Instruction("", "FJmp" + 0)); /*adr = gen.pc - 2;*/ .)
+  '(' Expr<out type> ')'        (.
+                                    if ((TastierType)type != TastierType.Boolean) {
+                                      SemErr("boolean type expected");
+                                    }
+                                    program.Add(new Instruction("", "FJmp" + 0)); /*adr = gen.pc - 2;*/
+                                .)
       Stat                      (.  program.Add(new Instruction("", "Jmp " + 0)); /*gen.Patch(adr, gen.pc);*/ .)
 
 | "read"
@@ -397,7 +411,8 @@ Term<out TastierType type>      (.  TastierType type1; Instruction inst; .)
 = Factor<out type>
   { MulOp<out inst>
     Factor<out type1>           (.
-                                    if (type != TastierType.Integer || type1 != TastierType.Integer) {
+                                    if (type != TastierType.Integer ||
+                                        type1 != TastierType.Integer) {
                                       SemErr("integer type expected");
                                     }
                                     program.Add(inst);
@@ -416,7 +431,7 @@ Type<out TastierType type>
 
 VarDecl                         (.  string name; TastierType type; Scope currentScope = openScopes.Peek(); .)
 = Type<out type>
-  Ident<out name>               (.  Symbol sym = new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count); currentScope.Push(sym); .)
+  Ident<out name>               (.  currentScope.Push(new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count)); .)
   { ',' Ident<out name>         (.  currentScope.Push(new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count)); .)
   } ';'.
 
