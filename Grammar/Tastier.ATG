@@ -72,7 +72,8 @@ COMPILER Tastier
     * Symbol.Item2 -> kind
     * Symbol.Item3 -> type
     * Symbol.Item4 -> stack frame pointer, -1 if procedure
-    * Symbol.Item5 -> variable's address in the stack frame pointed to by Item4, -1 if procedure
+    * Symbol.Item5 -> variable's address in the stack frame pointed to by
+                      Item4, -1 if procedure
 */
 
   class Scope : Stack<Symbol> {}
@@ -182,17 +183,17 @@ PRODUCTIONS
 /*------------------------------------------------------------------------*/
 
 AddOp<out Instruction inst>
-=                               (. inst = new Instruction("", "Add"); .)
+=                               (.  inst = new Instruction("", "Add"); .)
   ( '+'
-  | '-'                         (. inst = new Instruction("", "Sub"); .)
+  | '-'                         (.  inst = new Instruction("", "Sub"); .)
   ).
 
 /*------------------------------------------------------------------------*/
 
-Expr<out TastierType type>      (. TastierType type1; Instruction inst; .)
+Expr<out TastierType type>      (.  TastierType type1; Instruction inst; .)
 = SimExpr<out type>
   [ RelOp<out inst>
-    SimExpr<out type1>          (. if (type != type1) { SemErr("incompatible types"); }
+    SimExpr<out type1>          (.  if (type != type1) { SemErr("incompatible types"); }
                                     else { program.Add(inst); type = TastierType.Boolean; } .)
   ].
 
@@ -392,7 +393,7 @@ Tastier                         (.  string name; .)
 
 /*------------------------------------------------------------------------*/
 
-Term<out TastierType type>      (. TastierType type1; Instruction inst; .)
+Term<out TastierType type>      (.  TastierType type1; Instruction inst; .)
 = Factor<out type>
   { MulOp<out inst>
     Factor<out type1>           (.
@@ -413,10 +414,10 @@ Type<out TastierType type>
 
 /*------------------------------------------------------------------------*/
 
-VarDecl                         (. string name; TastierType type; Scope currentScope = openScopes.Peek(); .)
+VarDecl                         (.  string name; TastierType type; Scope currentScope = openScopes.Peek(); .)
 = Type<out type>
-  Ident<out name>               (. Symbol sym = new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count); currentScope.Push(sym); .)
-  { ',' Ident<out name>         (. currentScope.Push(new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count)); .)
+  Ident<out name>               (.  Symbol sym = new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count); currentScope.Push(sym); .)
+  { ',' Ident<out name>         (.  currentScope.Push(new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count)); .)
   } ';'.
 
 END Tastier.
