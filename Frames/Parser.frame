@@ -26,14 +26,11 @@ Coco/R itself) does not fall under the GNU General Public License.
 ----------------------------------------------------------------------*/
 -->begin
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using Symbol = Tuple<string, TastierKind, TastierType>;
-using Scope = Stack<Symbol>;
-using Instruction = Tuple<string, string>;
-using Program = List<Instruction>;
-using StackAddress = Tuple<int, int>;
 
+using Symbol = System.Tuple<string, int, int>;
+using Instruction = System.Tuple<string,string>;
+using StackAddress = System.Tuple<int, int>;
 
 -->namespace
 

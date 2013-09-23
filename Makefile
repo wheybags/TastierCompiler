@@ -1,7 +1,7 @@
 all:
 	mkdir -p Generated
-	cococs -frames Frames -o Generated -namespace Tastier Grammar/Tastier.ATG
-	mono-csc Main.cs Generated/*.cs -out:Tastier.exe
+	mono bin/Coco.exe -frames Frames -o Generated -namespace Tastier Grammar/Tastier.ATG
+	mcs Main.cs Generated/*.cs -out:Tastier.exe
 
 clean:
 	rm -f *.exe
