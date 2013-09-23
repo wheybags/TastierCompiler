@@ -1,4 +1,4 @@
-COMPILER Tastier // DMA
+COMPILER Tastier
 
 /*
   First, let's declare all the types we're going to use.
@@ -26,22 +26,53 @@ COMPILER Tastier // DMA
   Parser.frame, but they're documented in this file, with the rest.
 */
 
-  //using Symbol = System.Tuple<string, int, int>;
+  //using Symbol = System.Tuple<string, int, int, int, int>;
 
 /*
-  A Symbol is a name with a type and a TastierKind. The first int in the tuple is
-  the kind, and the second int is the type. We'll use these to represent
-  declared names in the program. For each Symbol which is a variable, we
-  have to allocate some storage, so the variable lives at some address in
-  memory. Procedures, on the other hand, are just sets of instructions. A
-  procedure is not data, so it isn't stored on the stack or in memory, but
-  is just a particular part of the list of instructions in the program being
-  compiled. When the program is being run, the code will be loaded into the
-  machine's instruction memory, and the procedure will have an address
-  there. However, it's easier for us to just give the procedure a unique
-  label, instead of remembering what address it lives at. The assembler will
-  take care of converting the label into an address when it encounters a
-  JMP, FJMP or CALL instruction with that label as a target.
+  A Symbol is a name with a type and a kind. The first int in the
+  tuple is the kind, and the second int is the type. We'll use these to
+  represent declared names in the program.
+
+  For each Symbol which is a variable, we have to allocate some storage, so
+  the variable lives at some address in memory. The address of a variable on
+  the stack at runtime has two components. The first component is which
+  stack frame it's in, relative to the current procedure. If the variable is
+  declared in the procedure that's currently executing, then it will be in
+  that procedure's stack frame. If it's declared in the procedure that
+  called the currently active one, then it'll be in the caller's stack
+  frame, and so on. The first component is the offset that says how many
+  frames up the chain of procedure calls to look for the variable. The
+  second component is simply the location of the variable in the stack frame
+  where it lives.
+
+  The third int in the symbol is the stack frame on which the variable
+  lives, and the fourth int is the index in that stack frame. Since
+  variables which are declared in the global scope aren't inside any
+  function, they don't have a stack frame to go into. In this compiler, our
+  convention is to put these variables at an address in the data memory. If
+  the variable was declared in the global scope, the third field in the
+  Symbol will be zero, and we know that the next field is an address in
+  global memory, not on the stack.
+
+  Procedures, on the other hand, are just sets of instructions. A procedure
+  is not data, so it isn't stored on the stack or in memory, but is just a
+  particular part of the list of instructions in the program being run. If
+  the symbol is the name of a procedure, we'll store a -1 in both the stack
+  frame pointer and the address fields (4 and 5).
+
+  When the program is being run, the code will be loaded into the machine's
+  instruction memory, and the procedure will have an address there. However,
+  it's easier for us to just give the procedure a unique label, instead of
+  remembering what address it lives at. The assembler will take care of
+  converting the label into an address when it encounters a JMP, FJMP or
+  CALL instruction with that label as a target.
+
+  To summarize:
+    * Symbol.Item1 -> name
+    * Symbol.Item2 -> kind
+    * Symbol.Item3 -> type
+    * Symbol.Item4 -> stack frame pointer, -1 if procedure
+    * Symbol.Item5 -> variable's address in the stack frame pointed to by Item4, -1 if procedure
 */
 
   class Scope : Stack<Symbol> {}
@@ -68,6 +99,10 @@ COMPILER Tastier // DMA
 
   The first component of all instructions is a label, which can be empty.
   The second component is the actual instruction itself.
+
+  To summarize:
+    * Instruction.Item1 -> label
+    * Instruction.Item2 -> the actual instruction, as a string
 */
 
 Stack<Scope> openScopes = new Stack<Scope>();
@@ -105,29 +140,14 @@ Stack<string> openLabels = new Stack<string>();
   put the label in, and pop it off the stack.
 */
 
-  //using StackAddress = Tuple<int, int>;
-
-/*
-  The address of a variable on the stack at runtime has two components. The
-  first component is which stack frame it's in, relative to the current
-  procedure. If the variable is declared in the procedure that's currently
-  executing, then it will be in that procedure's stack frame. If it's declared
-  in the procedure that called the currently active one, then it'll be in the
-  caller's stack frame, and so on. The first component is the offset that says
-  how many frames up the chain of procedure calls to look for the variable.
-  The second component is simply the location of the variable in the stack
-  frame where it lives.
-*/
-
-Tuple<Symbol, StackAddress> lookup(Stack<Scope> scopes, string name) {
+Symbol lookup(Stack<Scope> scopes, string name) {
   int stackFrameOffset = 0;
   int variableOffset = 0;
 
   foreach (Scope scope in scopes) {
     foreach (Symbol s in scope) {
       if (s.Item1 == name) {
-        StackAddress addr = new StackAddress(stackFrameOffset, variableOffset);
-        return new Tuple<Symbol, StackAddress>(s, addr);
+        return s;
       }
       else {
         variableOffset += 1;
@@ -162,9 +182,9 @@ PRODUCTIONS
 /*------------------------------------------------------------------------*/
 
 AddOp<out Instruction inst>
-=                        (. inst = new Instruction("", "Add"); .)
+=                               (. inst = new Instruction("", "Add"); .)
   ( '+'
-  | '-'                  (. inst = new Instruction("", "Sub"); .)
+  | '-'                         (. inst = new Instruction("", "Sub"); .)
   ).
 
 /*------------------------------------------------------------------------*/
@@ -172,170 +192,227 @@ AddOp<out Instruction inst>
 Expr<out TastierType type>      (. TastierType type1; Instruction inst; .)
 = SimExpr<out type>
   [ RelOp<out inst>
-    SimExpr<out type1>   (. if (type != type1) { SemErr("incompatible types"); }
-                            else { program.Add(inst); type = TastierType.Boolean; } .)
+    SimExpr<out type1>          (. if (type != type1) { SemErr("incompatible types"); }
+                                    else { program.Add(inst); type = TastierType.Boolean; } .)
   ].
 
 /*------------------------------------------------------------------------*/
 
-Factor<out TastierType type>    (. int n; Tuple<Symbol, StackAddress> result; string name; .)
-=                        (. type = TastierType.Undefined; .)
-  ( Ident<out name>      (. result = lookup(openScopes, name);
-                            if (result == null) { SemErr("reference to undefined variable " + name);}
-                            else {
-                              type = (TastierType)result.Item1.Item3;
-                              if ((TastierKind)result.Item1.Item2 == TastierKind.Var) {
-                                if (result.Item2.Item1 == 0) {
-                                    program.Add(new Instruction("", "LoadG " + result.Item2.Item2));
-                                } else {
-                                    program.Add(new Instruction("", "Load " + result.Item2.Item1 + " " + result.Item2.Item2));
-                                }
-                              } else SemErr("variable expected");
-                            }.)
-  | number               (. n = Convert.ToInt32(t.val);
-                            program.Add(new Instruction("", "Const " + n));
-                            type = TastierType.Integer; .)
+Factor<out TastierType type>    (.  int n; Symbol sym; string name; .)
+=                               (.  type = TastierType.Undefined; .)
+  ( Ident<out name>             (.
+                                    sym = lookup(openScopes, name);
+                                    if (sym == null) { SemErr("reference to undefined variable " + name);}
+                                    else {
+                                      type = (TastierType)sym.Item3;
+                                      if ((TastierKind)sym.Item2 == TastierKind.Var) {
+                                        if (sym.Item4 == 0) {
+                                            program.Add(new Instruction("", "LoadG " + sym.Item5));
+                                        } else {
+                                            program.Add(new Instruction("", "Load " + sym.Item4 + " " + sym.Item5));
+                                        }
+                                      } else SemErr("variable expected");
+                                    }
+                                .)
+  | number                      (.
+                                    n = Convert.ToInt32(t.val);
+                                    program.Add(new Instruction("", "Const " + n));
+                                    type = TastierType.Integer;
+                                .)
   | '-'
-    Factor<out type>     (. if (type != TastierType.Integer) {
-                               SemErr("integer type expected");
-                               type = TastierType.Integer;
-                            }
-                            program.Add(new Instruction("", "Neg")); .)
-  | "true"               (. program.Add(new Instruction("", "Const " + 1)); type = TastierType.Boolean; .)
-  | "false"              (. program.Add(new Instruction("", "Const " + 0)); type = TastierType.Boolean; .)
+    Factor<out type>            (.
+                                    if (type != TastierType.Integer) {
+                                      SemErr("integer type expected");
+                                      type = TastierType.Integer;
+                                    }
+                                    program.Add(new Instruction("", "Neg"));
+                                .)
+  | "true"                      (.  program.Add(new Instruction("", "Const " + 1)); type = TastierType.Boolean; .)
+  | "false"                     (.  program.Add(new Instruction("", "Const " + 0)); type = TastierType.Boolean; .)
   ).
 
 /*------------------------------------------------------------------------*/
 
 Ident<out string name>
-= ident                  (. name = t.val; .).
+= ident                         (.  name = t.val; .).
 
 /*------------------------------------------------------------------------*/
 
 MulOp<out Instruction inst>
-=                        (. inst = new Instruction("", "Mul"); .)
+=                               (.  inst = new Instruction("", "Mul"); .)
   ( '*'
-  | '/'                  (. inst = new Instruction("", "Div"); .)
+  | '/'                         (.  inst = new Instruction("", "Div"); .)
   ).
 
 /*------------------------------------------------------------------------*/
 
-ProcDecl                 (. string name; .)         // DMA
+ProcDecl                        (.  string name; Scope currentScope = openScopes.Peek(); .)
 = "void"
-  Ident<out name>        (. openScopes.Peek().Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined));
-                            openScopes.Push(new Scope());.)
+  Ident<out name>               (.
+                                    currentScope.Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, -1, -1));
+                                    openScopes.Push(new Scope());
+                                    currentScope = openScopes.Peek();
+                                .)
   '(' ')'
-  '{'                    (. program.Add(new Instruction(name, "Enter " + 0)); .)
+  '{'                           (.  program.Add(new Instruction(name, "Enter " + 0)); .)
 
-  { VarDecl | Stat |     (. program.Add(new Instruction("", "Jmp " + name + "$end")); .)      // DMA
+  { VarDecl | Stat |            (.  program.Add(new Instruction("", "Jmp " + name + "$end")); .)
     ProcDecl
-  }                                                                         // DMA
-  '}'                    (. program.Add(new Instruction("", "Leave"));
-                            program.Add(new Instruction("", "Ret"));
-                            program.Add(new Instruction(name + "$end", "Nop"));
-                            openScopes.Pop(); .).
+  }
+  '}'                           (.
+                                    program.Add(new Instruction("", "Leave"));
+                                    program.Add(new Instruction("", "Ret"));
+                                    program.Add(new Instruction(name + "$end", "Nop"));
+                                    openScopes.Pop();
+                                .).
 
 /*------------------------------------------------------------------------*/
 
 RelOp<out Instruction inst>
-=                        (. inst = new Instruction("", "Equ"); .)
+=                               (.  inst = new Instruction("", "Equ"); .)
   ( "=="
-  | '<'                  (. inst = new Instruction("", "Lss"); .)
-  | '>'                  (. inst = new Instruction("", "Gtr"); .)
+  | '<'                         (.  inst = new Instruction("", "Lss"); .)
+  | '>'                         (.  inst = new Instruction("", "Gtr"); .)
   ).
 
 /*------------------------------------------------------------------------*/
 
-SimExpr<out TastierType type>    (. TastierType type1; Instruction inst; .)
+SimExpr<out TastierType type>   (.  TastierType type1; Instruction inst; .)
 = Term<out type>
   { AddOp<out inst>
-    Term<out type1>      (. if (type != TastierType.Integer || type1 != TastierType.Integer)
-                               SemErr("integer type expected");
-                            program.Add(inst); .)
+    Term<out type1>             (.
+                                    if (type != TastierType.Integer || type1 != TastierType.Integer) {
+                                      SemErr("integer type expected");
+                                    }
+                                    program.Add(inst);
+                                .)
   }.
 
 /*------------------------------------------------------------------------*/
 
-Stat                     (. TastierType type; string name; Tuple<Symbol, StackAddress> result; Symbol sym; .)
+Stat                            (.  TastierType type; string name; Symbol sym; .)
 
-= Ident<out name>        (. result = lookup(openScopes, name);
-                            if (result == null) { SemErr("reference to undefined variable " + name); }
-                            sym = result.Item1; .)
-  ( '='                  (. if ((TastierKind)sym.Item2 != TastierKind.Var) SemErr("cannot assign to non-variable"); .)
+= Ident<out name>               (.
+                                    sym = lookup(openScopes, name);
+                                    if (sym == null) {
+                                      SemErr("reference to undefined variable " + name);
+                                    }
+                                .)
+  ( '='                         (.
+                                    if ((TastierKind)sym.Item2 != TastierKind.Var) {
+                                      SemErr("cannot assign to non-variable");
+                                    }
+                                .)
     Expr<out type> ';'
-                         (. if (type != (TastierType)sym.Item2) SemErr("incompatible types");
-                            if (openScopes.Count == 1) program.Add(new Instruction("", "StoG " + result.Item2.Item2));
-                               else program.Add(new Instruction("", "Sto " + result.Item2.Item1 + " " + result.Item2.Item2)); .) // DMA
-  | '(' ')' ';'          (. if ((TastierKind)result.Item1.Item2 != TastierKind.Proc) SemErr("object is not a procedure");
-                               program.Add(new Instruction("", "Call " + result.Item2.Item1 + " " + result.Item2.Item2)); .)     // DMA
+                                (.
+                                    if (type != (TastierType)sym.Item2) {
+                                      SemErr("incompatible types");
+                                    }
+                                    if (openScopes.Count == 1) {
+                                      program.Add(new Instruction("", "StoG " + sym.Item5));
+                                    }
+                                    else {
+                                      program.Add(new Instruction("", "Sto " + sym.Item4 + " " + sym.Item5));
+                                    }
+                                .)
+  | '(' ')' ';'                 (.
+                                    if ((TastierKind)sym.Item2 != TastierKind.Proc) {
+                                      SemErr("object is not a procedure");
+                                    }
+                                    program.Add(new Instruction("", "Call " + sym.Item4 + " " + sym.Item5));
+                                .)
   )
 
 | "if"
-  '(' Expr<out type> ')' (. if ((TastierType)type != TastierType.Boolean) SemErr("boolean type expected");
-                               program.Add(new Instruction("", "FJmp " + 0)); .)
+  '(' Expr<out type> ')'        (.  if ((TastierType)type != TastierType.Boolean) {
+                                      SemErr("boolean type expected");
+                                    }
+                                    program.Add(new Instruction("", "FJmp " + 0)); .)
       Stat
-      [ "else"           (. program.Add(new Instruction("", "Jmp " + 0));
-                            //gen.Patch(adr, gen.pc); adr = adr2;
-                          .)
+      [ "else"                  (.  program.Add(new Instruction("", "Jmp " + 0));
+                                    //gen.Patch(adr, gen.pc); adr = adr2;
+                                .)
         Stat
-      ]                  (.
-                            //gen.Patch(adr, gen.pc);
-                          .)
+      ]                         (.
+                                    //gen.Patch(adr, gen.pc);
+                                .)
 
-| "while"                (. /*loopstart = gen.pc;*/ .)
-  '(' Expr<out type> ')' (. if ((TastierType)type != TastierType.Boolean) SemErr("boolean type expected");
-                               program.Add(new Instruction("", "FJmp" + 0)); /*adr = gen.pc - 2;*/ .)
-      Stat               (. program.Add(new Instruction("", "Jmp " + 0)); /*gen.Patch(adr, gen.pc);*/ .)
+| "while"                       (.  /*loopstart = gen.pc;*/ .)
+  '(' Expr<out type> ')'        (.  if ((TastierType)type != TastierType.Boolean) SemErr("boolean type expected");
+                                        program.Add(new Instruction("", "FJmp" + 0)); /*adr = gen.pc - 2;*/ .)
+      Stat                      (.  program.Add(new Instruction("", "Jmp " + 0)); /*gen.Patch(adr, gen.pc);*/ .)
 
 | "read"
-  Ident<out name> ';'    (. result = lookup(openScopes, name);
-                            if (result == null) { SemErr("reference to undefined variable " + name); }
-                            sym = result.Item1;
-                            if (sym.Item2 != (int)TastierType.Integer) SemErr("integer type expected but " + sym.Item1 + " has type " + (TastierType)sym.Item2);
-                               program.Add(new Instruction("", "Read"));
-                            if (openScopes.Count == 1) program.Add(new Instruction("", "StoG " + result.Item2.Item2));
-                               else program.Add(new Instruction("", "Sto " + result.Item2.Item1 + " " + result.Item2.Item2)); .) // DMA
+  Ident<out name> ';'           (.
+                                    sym = lookup(openScopes, name);
+                                    if (sym == null) {
+                                      SemErr("reference to undefined variable " + name);
+                                    }
+
+                                    if (sym.Item2 != (int)TastierType.Integer) {
+                                      SemErr("integer type expected but " + sym.Item1 + " has type " + (TastierType)sym.Item2);
+                                    }
+                                    program.Add(new Instruction("", "Read"));
+
+                                    if (openScopes.Count == 1) {
+                                      program.Add(new Instruction("", "StoG " + sym.Item5));
+                                    }
+                                    else {
+                                      program.Add(new Instruction("", "Sto " + sym.Item4 + " " + sym.Item5));
+                                    }
+                                .)
 
 | "write"
-  Expr<out type> ';'     (. if (type != TastierType.Integer) SemErr("integer type expected");
-                               program.Add(new Instruction("", "Write")); .)
+  Expr<out type> ';'            (.
+                                    if (type != TastierType.Integer) {
+                                      SemErr("integer type expected");
+                                    }
+                                    program.Add(new Instruction("", "Write"));
+                                .)
 
 | '{' { Stat | VarDecl } '}' .
 
 /*------------------------------------------------------------------------*/
 
-Tastier                  (. string name; .) // DMA
+Tastier                         (.  string name; .)
 = "program"
-  Ident<out name>        (. openScopes.Push(new Scope()); .)
+  Ident<out name>               (.  openScopes.Push(new Scope()); .)
   '{'
   { VarDecl | ProcDecl }
-  '}'                    (. if (openScopes.Peek().Count == 0) { SemErr("No main function defined"); }
-                            openScopes.Pop(); .).
+  '}'                           (.
+                                    if (openScopes.Peek().Count == 0) {
+                                      SemErr("No main function defined");
+                                    }
+                                    openScopes.Pop();
+                                .).
 
 /*------------------------------------------------------------------------*/
 
-Term<out TastierType type>       (. TastierType type1; Instruction inst; .)
+Term<out TastierType type>      (. TastierType type1; Instruction inst; .)
 = Factor<out type>
   { MulOp<out inst>
-    Factor<out type1>    (. if (type != TastierType.Integer || type1 != TastierType.Integer)
-                               SemErr("integer type expected");
-                            program.Add(inst); .)
+    Factor<out type1>           (.
+                                    if (type != TastierType.Integer || type1 != TastierType.Integer) {
+                                      SemErr("integer type expected");
+                                    }
+                                    program.Add(inst);
+                                .)
   }.
 
 /*------------------------------------------------------------------------*/
 
 Type<out TastierType type>
-=                        (. type = TastierType.Undefined; .)
- ( "int"                 (. type = TastierType.Integer; .)
- | "bool"                (. type = TastierType.Boolean; .)
+=                               (.  type = TastierType.Undefined; .)
+ ( "int"                        (.  type = TastierType.Integer; .)
+ | "bool"                       (.  type = TastierType.Boolean; .)
  ).
 
 /*------------------------------------------------------------------------*/
 
-VarDecl                  (. string name; TastierType type; .)
+VarDecl                         (. string name; TastierType type; Scope currentScope = openScopes.Peek(); .)
 = Type<out type>
-  Ident<out name>        (. openScopes.Peek().Push(new Symbol(name, (int)TastierKind.Var, (int)type)); .)
-  { ',' Ident<out name>  (. openScopes.Peek().Push(new Symbol(name, (int)TastierKind.Var, (int)type)); .)
+  Ident<out name>               (. Symbol sym = new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count); currentScope.Push(sym); Warn(sym.ToString()); .)
+  { ',' Ident<out name>         (. currentScope.Push(new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count)); .)
   } ';'.
 
-END Tastier. // DMA
+END Tastier.
