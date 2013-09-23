@@ -26,6 +26,7 @@ Coco/R itself) does not fall under the GNU General Public License.
 ----------------------------------------------------------------------*/
 -->begin
 using System;
+using System.IO;
 using System.Collections.Generic;
 
 using Symbol = System.Tuple<string, int, int, int, int>;
@@ -66,6 +67,18 @@ public class Parser {
 
   public void Warn (string msg) {
     Console.WriteLine("-- line " + t.line + " col " + t.col + ": " + msg);
+  }
+
+  public void Write (string filename) {
+    List<string> output = new List<string>();
+    foreach (Instruction i in program) {
+      if (i.Item1 != "") {
+        output.Add(i.Item1 + ": " + i.Item2);
+      } else {
+        output.Add(i.Item2);
+      }
+    }
+    File.WriteAllLines(filename, output.ToArray());
   }
 
 	void Get () {

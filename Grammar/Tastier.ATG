@@ -305,7 +305,7 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                 .)
     Expr<out type> ';'
                                 (.
-                                    if (type != (TastierType)sym.Item2) {
+                                    if (type != (TastierType)sym.Item3) {
                                       SemErr("incompatible types");
                                     }
                                     if (openScopes.Count == 1) {
@@ -349,7 +349,11 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                       SemErr("reference to undefined variable " + name);
                                     }
 
-                                    if (sym.Item2 != (int)TastierType.Integer) {
+                                    if (sym.Item2 != (int)TastierKind.Var) {
+                                      SemErr("variable type expected but " + sym.Item1 + " has kind " + (TastierType)sym.Item2);
+                                    }
+
+                                    if (sym.Item3 != (int)TastierType.Integer) {
                                       SemErr("integer type expected but " + sym.Item1 + " has type " + (TastierType)sym.Item2);
                                     }
                                     program.Add(new Instruction("", "Read"));
@@ -411,7 +415,7 @@ Type<out TastierType type>
 
 VarDecl                         (. string name; TastierType type; Scope currentScope = openScopes.Peek(); .)
 = Type<out type>
-  Ident<out name>               (. Symbol sym = new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count); currentScope.Push(sym); Warn(sym.ToString()); .)
+  Ident<out name>               (. Symbol sym = new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count); currentScope.Push(sym); .)
   { ',' Ident<out name>         (. currentScope.Push(new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count)); .)
   } ';'.
 
