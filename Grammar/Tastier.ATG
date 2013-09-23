@@ -57,8 +57,8 @@ COMPILER Tastier
   Procedures, on the other hand, are just sets of instructions. A procedure
   is not data, so it isn't stored on the stack or in memory, but is just a
   particular part of the list of instructions in the program being run. If
-  the symbol is the name of a procedure, we'll store a -1 in both the stack
-  frame pointer and the address fields (4 and 5).
+  the symbol is the name of a procedure, we'll store a -1 in the address
+  field (5).
 
   When the program is being run, the code will be loaded into the machine's
   instruction memory, and the procedure will have an address there. However,
@@ -71,7 +71,7 @@ COMPILER Tastier
     * Symbol.Item1 -> name
     * Symbol.Item2 -> kind
     * Symbol.Item3 -> type
-    * Symbol.Item4 -> stack frame pointer, -1 if procedure
+    * Symbol.Item4 -> stack frame pointer
     * Symbol.Item5 -> variable's address in the stack frame pointed to by
                       Item4, -1 if procedure
 */
@@ -258,7 +258,7 @@ MulOp<out Instruction inst>
 ProcDecl                        (.  string name; Scope currentScope = openScopes.Peek(); .)
 = "void"
   Ident<out name>               (.
-                                    currentScope.Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, -1, -1));
+                                    currentScope.Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, openScopes.Count, -1));
                                     openScopes.Push(new Scope());
                                     currentScope = openScopes.Peek();
                                 .)
@@ -328,7 +328,10 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                     if ((TastierKind)sym.Item2 != TastierKind.Proc) {
                                       SemErr("object is not a procedure");
                                     }
-                                    program.Add(new Instruction("", "Call " + sym.Item4 + " " + sym.Item5));
+
+                                    int currentStackLevel = openScopes.Count;
+                                    int lexicalLevelDifference = openScopes.Count - (sym.Item4);
+                                    program.Add(new Instruction("", "Call " + lexicalLevelDifference + " " + sym.Item1));
                                 .)
   )
 
@@ -353,7 +356,7 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                     if ((TastierType)type != TastierType.Boolean) {
                                       SemErr("boolean type expected");
                                     }
-                                    program.Add(new Instruction("", "FJmp" + 0)); /*adr = gen.pc - 2;*/
+                                    program.Add(new Instruction("", "FJmp " + 0)); /*adr = gen.pc - 2;*/
                                 .)
       Stat                      (.  program.Add(new Instruction("", "Jmp " + 0)); /*gen.Patch(adr, gen.pc);*/ .)
 
