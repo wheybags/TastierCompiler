@@ -4,13 +4,13 @@ COMPILER Tastier // DMA
   First, let's declare all the types we're going to use.
 */
 
-  enum TastierType {   // types for variables
+  enum TastierType : int {   // types for variables
     Undefined,
     Integer,
     Boolean
   };
 
-  enum TastierKind {  // kinds of symbol
+  enum TastierKind : int {  // kinds of symbol
     Var,
     Proc
   };
@@ -29,7 +29,7 @@ COMPILER Tastier // DMA
   //using Symbol = System.Tuple<string, int, int>;
 
 /*
-  A Symbol is a name with a type and a kind. The first int in the tuple is
+  A Symbol is a name with a type and a TastierKind. The first int in the tuple is
   the kind, and the second int is the type. We'll use these to represent
   declared names in the program. For each Symbol which is a variable, we
   have to allocate some storage, so the variable lives at some address in
@@ -183,8 +183,8 @@ Factor<out TastierType type>    (. int n; Tuple<Symbol, StackAddress> result; st
   ( Ident<out name>      (. result = lookup(openScopes, name);
                             if (result == null) { SemErr("reference to undefined variable " + name);}
                             else {
-                              type = result.Item1.Item3;
-                              if (result.Item1.Item2 == Kind.Var) {
+                              type = (TastierType)result.Item1.Item3;
+                              if ((TastierKind)result.Item1.Item2 == TastierKind.Var) {
                                 if (result.Item2.Item1 == 0) {
                                     program.Add(new Instruction("", "LoadG " + result.Item2.Item2));
                                 } else {
@@ -220,9 +220,9 @@ MulOp<out Instruction inst>
 
 /*------------------------------------------------------------------------*/
 
-ProcDecl                 (. string name; Tuple<Symbol, StackAddress> result; .)         // DMA
+ProcDecl                 (. string name; .)         // DMA
 = "void"
-  Ident<out name>        (. openScopes.Peek().Push(new Symbol(name, Kind.Procedure, TastierType.Undefined));
+  Ident<out name>        (. openScopes.Peek().Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined));
                             openScopes.Push(new Scope());.)
   '(' ')'
   '{'                    (. program.Add(new Instruction(name, "Enter " + 0)); .)
@@ -256,25 +256,25 @@ SimExpr<out TastierType type>    (. TastierType type1; Instruction inst; .)
 
 /*------------------------------------------------------------------------*/
 
-Stat                     (. TastierType type; string name; Tuple<Symbol, StackAddress> result; Symbol sym;
-                            int adr, adr2, loopstart; .)
+Stat                     (. TastierType type; string name; Tuple<Symbol, StackAddress> result; Symbol sym; .)
+
 = Ident<out name>        (. result = lookup(openScopes, name);
                             if (result == null) { SemErr("reference to undefined variable " + name); }
-                            else { sym = result.Item1; } .)
-  ( '='                  (. if (sym.Item1 != Kind.Variable) SemErr("cannot assign to non-variable"); .)
+                            sym = result.Item1; .)
+  ( '='                  (. if ((TastierKind)sym.Item2 != TastierKind.Var) SemErr("cannot assign to non-variable"); .)
     Expr<out type> ';'
                          (. if (type != (TastierType)sym.Item2) SemErr("incompatible types");
-                            if (obj.level == 0) program.Add(new Instruction(Instruction.STOG, obj.address.value_if_direct));
-                               else program.Add(new Instruction(Instruction.STO, tab.currentLevel()-obj.level, obj.address.value_if_direct)); .) // DMA
-  | '(' ')' ';'          (. if (obj.kind != Kind.Procedure) SemErr("object is not a procedure");
-                               program.Add(new Instruction(Instruction.CALL, obj.level-tab.currentLevel(), obj.address.value_if_direct)); .)     // DMA
+                            if (openScopes.Count == 1) program.Add(new Instruction("", "StoG " + result.Item2.Item2));
+                               else program.Add(new Instruction("", "Sto " + result.Item2.Item1 + " " + result.Item2.Item2)); .) // DMA
+  | '(' ')' ';'          (. if ((TastierKind)result.Item1.Item2 != TastierKind.Proc) SemErr("object is not a procedure");
+                               program.Add(new Instruction("", "Call " + result.Item2.Item1 + " " + result.Item2.Item2)); .)     // DMA
   )
 
 | "if"
-  '(' Expr<out type> ')' (. if (type != TastierType.Boolean) SemErr("boolean type expected");
-                               program.Add(new Instruction(Instruction.FJMP, 0)); .)
+  '(' Expr<out type> ')' (. if ((TastierType)type != TastierType.Boolean) SemErr("boolean type expected");
+                               program.Add(new Instruction("", "FJmp " + 0)); .)
       Stat
-      [ "else"           (. program.Add(new Instruction(Instruction.JMP, 0));
+      [ "else"           (. program.Add(new Instruction("", "Jmp " + 0));
                             //gen.Patch(adr, gen.pc); adr = adr2;
                           .)
         Stat
@@ -283,16 +283,18 @@ Stat                     (. TastierType type; string name; Tuple<Symbol, StackAd
                           .)
 
 | "while"                (. /*loopstart = gen.pc;*/ .)
-  '(' Expr<out type> ')' (. if (type != TastierType.Boolean) SemErr("boolean type expected");
-                               program.Add(new Instruction(Instruction.FJMP, 0)); /*adr = gen.pc - 2;*/ .)
-      Stat               (. program.Add(new Instruction(Instruction.JMP, 0)); /*gen.Patch(adr, gen.pc);*/ .)
+  '(' Expr<out type> ')' (. if ((TastierType)type != TastierType.Boolean) SemErr("boolean type expected");
+                               program.Add(new Instruction("", "FJmp" + 0)); /*adr = gen.pc - 2;*/ .)
+      Stat               (. program.Add(new Instruction("", "Jmp " + 0)); /*gen.Patch(adr, gen.pc);*/ .)
 
 | "read"
-  Ident<out name> ';'    (. obj = tab.Find(name);
-                            if (obj.type != TastierType.Integer) SemErr("integer type expected");
-                               program.Add(new Instruction(Instruction.READ));
-                            if (obj.level == 0) program.Add(new Instruction(Instruction.STOG, obj.address.value_if_direct));
-                               else program.Add(new Instruction(Instruction.STO, tab.currentLevel()-obj.level, obj.address.value_if_direct)); .) // DMA
+  Ident<out name> ';'    (. result = lookup(openScopes, name);
+                            if (result == null) { SemErr("reference to undefined variable " + name); }
+                            sym = result.Item1;
+                            if (sym.Item2 != (int)TastierType.Integer) SemErr("integer type expected but " + sym.Item1 + " has type " + (TastierType)sym.Item2);
+                               program.Add(new Instruction("", "Read"));
+                            if (openScopes.Count == 1) program.Add(new Instruction("", "StoG " + result.Item2.Item2));
+                               else program.Add(new Instruction("", "Sto " + result.Item2.Item1 + " " + result.Item2.Item2)); .) // DMA
 
 | "write"
   Expr<out type> ';'     (. if (type != TastierType.Integer) SemErr("integer type expected");
@@ -332,8 +334,8 @@ Type<out TastierType type>
 
 VarDecl                  (. string name; TastierType type; .)
 = Type<out type>
-  Ident<out name>        (. openScopes.Peek().Push(new Symbol(name, Kind.Variable, type)); .)
-  { ',' Ident<out name>  (. openScopes.Peek().Push(new Symbol(name, Kind.Variable, type)); .)
+  Ident<out name>        (. openScopes.Peek().Push(new Symbol(name, (int)TastierKind.Var, (int)type)); .)
+  { ',' Ident<out name>  (. openScopes.Peek().Push(new Symbol(name, (int)TastierKind.Var, (int)type)); .)
   } ';'.
 
 END Tastier. // DMA
