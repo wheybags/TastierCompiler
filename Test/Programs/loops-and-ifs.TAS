@@ -1,11 +1,10 @@
 
 program Test {
   int i;
-  int sum;
 
   void Main() {
     read i;
-    //int sum;
+    int sum;
     sum = 0;
     while (i > 0) {
       sum = sum + i; i = i - 1;

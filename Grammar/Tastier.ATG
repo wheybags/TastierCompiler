@@ -277,7 +277,7 @@ MulOp<out Instruction inst>
 
 /*------------------------------------------------------------------------*/
 
-ProcDecl                        (.  string name; Scope currentScope = openScopes.Peek(); .)
+ProcDecl                        (.  string name; Scope currentScope = openScopes.Peek(); int enterInstLocation = 0; .)
 = "void"
   Ident<out name>               (.
                                     currentScope.Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, openScopes.Count, -1));
@@ -285,10 +285,35 @@ ProcDecl                        (.  string name; Scope currentScope = openScopes
                                     currentScope = openScopes.Peek();
                                 .)
   '(' ')'
-  '{'                           (.  program.Add(new Instruction(name, "Enter " + 0)); .)
+  '{'                           (.
+                                    enterInstLocation = program.Count;
+                                    program.Add(new Instruction(name, "Enter 0"));
+                                    /*
+                                      Enter is supposed to have as an
+                                      argument the next free address on the
+                                      stack, but until we know how many
+                                      local variables are in this procedure,
+                                      we don't know what that is. We'll keep
+                                      track of where we put the Enter
+                                      instruction in the program so that
+                                      later, when we know how many spaces on
+                                      the stack have been allocated, we can
+                                      put the right value in.
+                                    */
+                                .)
 
-  { VarDecl | Stat |            (.  program.Add(new Instruction("", "Jmp " + name + "$end")); .)
-    ProcDecl
+  { VarDecl | Stat |            (.
+                                    openLabels.Push(generateLabel());
+                                    program.Add(new Instruction("", "Jmp " + openLabels.Peek()));
+                                    /*
+                                      We need to jump over procedure
+                                      definitions because otherwise we'll
+                                      execute all the code inside them!
+                                      Procedures should only be entered via
+                                      a Call instruction.
+                                    */
+                                .)
+    ProcDecl                    (. program.Add(new Instruction(openLabels.Pop(), "Nop")); .)
   }
   '}'                           (.
                                     program.Add(new Instruction("", "Leave"));
@@ -296,6 +321,9 @@ ProcDecl                        (.  string name; Scope currentScope = openScopes
                                     openScopes.Pop();
                                     if (name == "Main") {
                                       program.Add(new Instruction("$END", "Halt"));
+                                    } else {
+                                      // now we can generate the Enter instruction properly
+                                      program.Insert(enterInstLocation, new Instruction("", "Enter " + currentScope.Count));
                                     }
                                 .).
 
