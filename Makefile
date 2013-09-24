@@ -1,10 +1,10 @@
-CSHARPCOMPILER = $(shell command -v mono-csc >/dev/null 2>&1)
-
-ifeq ($(strip $(CSHARPCOMPILER)),)
 CSHARPCOMPILER = mcs
-endif
 
-export http_proxy="http://www-proxy.scss.tcd.ie:8080"
+ifeq ($findstring macneill $HOSTNAME, macneill)
+export http_proxy = "http://www-proxy.scss.tcd.ie:8080"
+export https_proxy = $http_proxy
+CSHARPCOMPILER = mono-csc
+endif
 
 all: bin/coco.exe doc/UserManual.pdf
 	mkdir -p generated
