@@ -121,7 +121,18 @@ Stack<Scope> openScopes = new Stack<Scope>();
 */
 
 Program program = new Program();
+
+/*
+  The first instruction in any program is going to be a call to a procedure
+  called Main.
+*/
+
 Stack<string> openLabels = new Stack<string>();
+int labelSeed = 0;
+
+string generateLabel() {
+  return "L$"+labelSeed++;
+}
 
 /*
   Sometimes, we need to jump over a block of code which we're about to
@@ -160,6 +171,15 @@ Symbol lookup(Stack<Scope> scopes, string name) {
   return null; // if the name wasn't found in any open scopes.
 }
 
+/*
+  You may notice that when we use a LoadG or StoG instruction, we add 4 to
+  the address of the item being loaded or stored. This is because the
+  control and status registers of the machine are mapped in at addresses 0,
+  1, 2, and 3 in data memory, so we cannot use those locations for storing
+  variables. If you want to load rtp, rbp, rpc or rcc onto the stack to
+  manipulate them, you can LoadG and StoG to those locations.
+*/
+
 /*--------------------------------------------------------------------------*/
 
 CHARACTERS
@@ -193,7 +213,8 @@ AddOp<out Instruction inst>
 Expr<out TastierType type>      (.  TastierType type1; Instruction inst; .)
 = SimExpr<out type>
   [ RelOp<out inst>
-    SimExpr<out type1>          (.  if (type != type1) {
+    SimExpr<out type1>          (.
+                                    if (type != type1) {
                                       SemErr("incompatible types");
                                     }
                                     else {
@@ -216,7 +237,7 @@ Factor<out TastierType type>    (.  int n; Symbol sym; string name; .)
                                       type = (TastierType)sym.Item3;
                                       if ((TastierKind)sym.Item2 == TastierKind.Var) {
                                         if (sym.Item4 == 0) {
-                                            program.Add(new Instruction("", "LoadG " + sym.Item5));
+                                            program.Add(new Instruction("", "LoadG " + (sym.Item5+4)));
                                         } else {
                                             program.Add(new Instruction("", "Load " + sym.Item4 + " " + sym.Item5));
                                         }
@@ -271,8 +292,10 @@ ProcDecl                        (.  string name; Scope currentScope = openScopes
   '}'                           (.
                                     program.Add(new Instruction("", "Leave"));
                                     program.Add(new Instruction("", "Ret"));
-                                    program.Add(new Instruction(name + "$end", "Nop"));
                                     openScopes.Pop();
+                                    if (name == "Main") {
+                                      program.Add(new Instruction("$END", "Halt"));
+                                    }
                                 .).
 
 /*------------------------------------------------------------------------*/
@@ -317,11 +340,11 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                     if (type != (TastierType)sym.Item3) {
                                       SemErr("incompatible types");
                                     }
-                                    if (openScopes.Count == 1) {
-                                      program.Add(new Instruction("", "StoG " + sym.Item5));
+                                    if (sym.Item4 == 0) {
+                                      program.Add(new Instruction("", "StoG " + (sym.Item5+4)));
                                     }
                                     else {
-                                      program.Add(new Instruction("", "Sto " + sym.Item4 + " " + sym.Item5));
+                                      program.Add(new Instruction("", "Sto " + Math.Abs(openScopes.Count - sym.Item4) + " " + sym.Item5));
                                     }
                                 .)
   | '(' ')' ';'                 (.
@@ -340,25 +363,27 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                     if ((TastierType)type != TastierType.Boolean) {
                                       SemErr("boolean type expected");
                                     }
-                                    program.Add(new Instruction("", "FJmp " + 0)); .)
-      Stat
-      [ "else"                  (.
-                                    program.Add(new Instruction("", "Jmp " + 0));
-                                    //gen.Patch(adr, gen.pc); adr = adr2;
+                                    openLabels.Push(generateLabel());
+                                    program.Add(new Instruction("", "FJmp " + openLabels.Peek()));
                                 .)
+      Stat                      (. program.Add(new Instruction(openLabels.Pop(), "Nop")); .)
+      [ "else"
         Stat
-      ]                         (.
-                                    //gen.Patch(adr, gen.pc);
-                                .)
+      ]
 
-| "while"                       (.  /*loopstart = gen.pc;*/ .)
+| "while"                       (.  string loopStartLabel = generateLabel();
+                                    openLabels.Push(generateLabel()); //second label is for the loop end
+                                    program.Add(new Instruction(loopStartLabel, "Nop"));
+                                .)
   '(' Expr<out type> ')'        (.
                                     if ((TastierType)type != TastierType.Boolean) {
                                       SemErr("boolean type expected");
                                     }
-                                    program.Add(new Instruction("", "FJmp " + 0)); /*adr = gen.pc - 2;*/
+                                    program.Add(new Instruction("", "FJmp " + openLabels.Peek())); // jump to the loop end label if condition is false
                                 .)
-      Stat                      (.  program.Add(new Instruction("", "Jmp " + 0)); /*gen.Patch(adr, gen.pc);*/ .)
+      Stat                      (.  program.Add(new Instruction("", "Jmp " + loopStartLabel));
+                                    program.Add(new Instruction(openLabels.Pop(), "Nop")); // put the loop end label here
+                                .)
 
 | "read"
   Ident<out name> ';'           (.
@@ -376,11 +401,11 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                     }
                                     program.Add(new Instruction("", "Read"));
 
-                                    if (openScopes.Count == 1) {
-                                      program.Add(new Instruction("", "StoG " + sym.Item5));
+                                    if (sym.Item4 == 0) {
+                                      program.Add(new Instruction("", "StoG " + (sym.Item5+4)));
                                     }
                                     else {
-                                      program.Add(new Instruction("", "Sto " + sym.Item4 + " " + sym.Item5));
+                                      program.Add(new Instruction("", "Sto " + Math.Abs(openScopes.Count - sym.Item4) + " " + sym.Item5));
                                     }
                                 .)
 
@@ -398,7 +423,11 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
 
 Tastier                         (.  string name; .)
 = "program"
-  Ident<out name>               (.  openScopes.Push(new Scope()); .)
+  Ident<out name>               (.
+                                    openScopes.Push(new Scope());
+                                    program.Add(new Instruction("", "Call 0 Main"));
+                                    program.Add(new Instruction("", "Jmp $END"));
+                                .)
   '{'
   { VarDecl | ProcDecl }
   '}'                           (.
