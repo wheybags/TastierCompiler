@@ -2,3 +2,4 @@ Generated/*
 *.exe
 *.asm
 *.bc
+*.IN

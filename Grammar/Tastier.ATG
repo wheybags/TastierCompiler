@@ -239,7 +239,8 @@ Factor<out TastierType type>    (.  int n; Symbol sym; string name; .)
                                         if (sym.Item4 == 0) {
                                             program.Add(new Instruction("", "LoadG " + (sym.Item5+4)));
                                         } else {
-                                            program.Add(new Instruction("", "Load " + sym.Item4 + " " + sym.Item5));
+                                            int lexicalLevelDifference = Math.Abs(openScopes.Count - sym.Item4)-1;
+                                            program.Add(new Instruction("", "Load " + lexicalLevelDifference + " " + sym.Item5));
                                         }
                                       } else SemErr("variable expected");
                                     }
@@ -344,7 +345,8 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                       program.Add(new Instruction("", "StoG " + (sym.Item5+4)));
                                     }
                                     else {
-                                      program.Add(new Instruction("", "Sto " + Math.Abs(openScopes.Count - sym.Item4) + " " + sym.Item5));
+                                      int lexicalLevelDifference = Math.Abs(openScopes.Count - sym.Item4)-1;
+                                      program.Add(new Instruction("", "Sto " + lexicalLevelDifference + " " + sym.Item5));
                                     }
                                 .)
   | '(' ')' ';'                 (.
@@ -353,7 +355,7 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                     }
 
                                     int currentStackLevel = openScopes.Count;
-                                    int lexicalLevelDifference = openScopes.Count - (sym.Item4);
+                                    int lexicalLevelDifference = Math.Abs(openScopes.Count - sym.Item4)-1;
                                     program.Add(new Instruction("", "Call " + lexicalLevelDifference + " " + sym.Item1));
                                 .)
   )
@@ -405,7 +407,8 @@ Stat                            (.  TastierType type; string name; Symbol sym; .
                                       program.Add(new Instruction("", "StoG " + (sym.Item5+4)));
                                     }
                                     else {
-                                      program.Add(new Instruction("", "Sto " + Math.Abs(openScopes.Count - sym.Item4) + " " + sym.Item5));
+                                      int lexicalLevelDifference = Math.Abs(openScopes.Count - sym.Item4)-1;
+                                      program.Add(new Instruction("", "Sto " + lexicalLevelDifference + " " + sym.Item5));
                                     }
                                 .)
 
