@@ -4,7 +4,9 @@ ifeq ($(strip $(CSHARPCOMPILER)),)
 CSHARPCOMPILER = mcs
 endif
 
-all: Test/Coco.exe doc
+export http_proxy="http://www-proxy.scss.tcd.ie:8080"
+
+all: Test/Coco.exe Doc/UserManual.pdf
 	mkdir -p Generated
 	mono Test/Coco.exe -frames Frames -o Generated -namespace Tastier Grammar/Tastier.ATG
 	$(CSHARPCOMPILER) Main.cs Generated/*.cs -out:Test/tcc.exe
@@ -12,7 +14,7 @@ all: Test/Coco.exe doc
 Test/Coco.exe:
 	curl http://www.ssw.uni-linz.ac.at/coco/CS/Coco.exe >> Test/Coco.exe
 
-doc:
+Doc/UserManual.pdf:
 	mkdir -p Doc
 	curl http://ssw.jku.at/coco/Doc/UserManual.pdf >> Doc/UserManual.pdf
 
