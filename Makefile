@@ -1,6 +1,6 @@
 CSHARPCOMPILER = mcs
 
-ifeq ($findstring macneill $HOSTNAME, macneill)
+ifeq ($(shell hostname), macneill)
 export http_proxy = "http://www-proxy.scss.tcd.ie:8080"
 export https_proxy = $http_proxy
 CSHARPCOMPILER = mono-csc
