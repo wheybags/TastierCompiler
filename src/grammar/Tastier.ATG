@@ -319,12 +319,8 @@ ProcDecl                        (.  string name; Scope currentScope = openScopes
                                     program.Add(new Instruction("", "Leave"));
                                     program.Add(new Instruction("", "Ret"));
                                     openScopes.Pop();
-                                    if (name == "Main") {
-                                      program.Add(new Instruction("$END", "Halt"));
-                                    } else {
-                                      // now we can generate the Enter instruction properly
-                                      program.Insert(enterInstLocation, new Instruction("", "Enter " + currentScope.Count));
-                                    }
+                                    // now we can generate the Enter instruction properly
+                                    program.Insert(enterInstLocation, new Instruction("", "Enter " + currentScope.Count));
                                 .).
 
 /*------------------------------------------------------------------------*/
@@ -456,8 +452,6 @@ Tastier                         (.  string name; .)
 = "program"
   Ident<out name>               (.
                                     openScopes.Push(new Scope());
-                                    program.Add(new Instruction("", "Call 0 Main"));
-                                    program.Add(new Instruction("", "Jmp $END"));
                                 .)
   '{'
   { VarDecl | ProcDecl }
