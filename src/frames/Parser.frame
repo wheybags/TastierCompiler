@@ -71,7 +71,7 @@ public class Parser {
 
   public void Write (string filename) {
     List<string> output = new List<string>();
-    foreach (Instruction i in program) {
+    foreach (Instruction i in header) {
       if (i.Item1 != "") {
         output.Add(i.Item1 + ": " + i.Item2);
       } else {
