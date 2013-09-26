@@ -50,7 +50,7 @@ COMPILER Tastier
   variables which are declared in the global scope aren't inside any
   function, they don't have a stack frame to go into. In this compiler, our
   convention is to put these variables at an address in the data memory. If
-  the variable was declared in the global scope, the third field in the
+  the variable was declared in the global scope, the fourth field in the
   Symbol will be zero, and we know that the next field is an address in
   global memory, not on the stack.
 
@@ -123,11 +123,6 @@ Scope externalDeclarations = new Scope();
 
 Program program = new Program();
 Program header = new Program();
-
-/*
-  The first instruction in any program is going to be a call to a procedure
-  called Main.
-*/
 
 Stack<string> openLabels = new Stack<string>();
 int labelSeed = 0;
@@ -240,7 +235,7 @@ Expr<out TastierType type>      (.  TastierType type1; Instruction inst; .)
 Factor<out TastierType type>    (.  int n; Symbol sym; string name; .)
 =                               (.  type = TastierType.Undefined; .)
   ( Ident<out name>             (.
-                                    bool isExternal = false;
+                                    bool isExternal = false; //CS3071 students can ignore external declarations, since they only deal with compilation of single files.
                                     sym = lookup(openScopes, name);
                                     if (sym == null) {
                                       sym = _lookup(externalDeclarations, name);
