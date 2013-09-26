@@ -1,10 +1,4 @@
-CSHARPCOMPILER = mcs
-
-ifeq ($(shell hostname), macneill)
-export http_proxy = "http://www-proxy.scss.tcd.ie:8080"
-export https_proxy = $http_proxy
-CSHARPCOMPILER = mono-csc
-endif
+CSHARPCOMPILER = dmcs
 
 all: bin/coco.exe doc/UserManual.pdf
 	mkdir -p generated
