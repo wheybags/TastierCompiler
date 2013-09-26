@@ -183,11 +183,11 @@ Symbol lookup(Stack<Scope> scopes, string name) {
 }
 
 /*
-  You may notice that when we use a LoadG or StoG instruction, we add 4 to
+  You may notice that when we use a LoadG or StoG instruction, we add 3 to
   the address of the item being loaded or stored. This is because the
   control and status registers of the machine are mapped in at addresses 0,
-  1, 2, and 3 in data memory, so we cannot use those locations for storing
-  variables. If you want to load rtp, rbp, rpc or rcc onto the stack to
+  1, and 2 in data memory, so we cannot use those locations for storing
+  variables. If you want to load rtp, rbp, or rpc onto the stack to
   manipulate them, you can LoadG and StoG to those locations.
 */
 
@@ -258,7 +258,7 @@ Factor<out TastierType type>    (.  int n; Symbol sym; string name; .)
                                               program.Add(new Instruction("", "LoadG " + sym.Item1));
                                               // if the symbol is external, we load it by name. The linker will resolve the name to an address.
                                             } else {
-                                              program.Add(new Instruction("", "LoadG " + (sym.Item5+4)));
+                                              program.Add(new Instruction("", "LoadG " + (sym.Item5+3)));
                                             }
                                         } else {
                                             int lexicalLevelDifference = Math.Abs(openScopes.Count - sym.Item4)-1;
@@ -396,7 +396,7 @@ Stat                            (.  TastierType type; string name; Symbol sym; b
                                         program.Add(new Instruction("", "StoG " + sym.Item1));
                                         // if the symbol is external, we also store it by name. The linker will resolve the name to an address.
                                       } else {
-                                        program.Add(new Instruction("", "StoG " + (sym.Item5+4)));
+                                        program.Add(new Instruction("", "StoG " + (sym.Item5+3)));
                                       }
                                     }
                                     else {
@@ -467,7 +467,7 @@ Stat                            (.  TastierType type; string name; Symbol sym; b
                                         program.Add(new Instruction("", "StoG " + sym.Item1));
                                         // if the symbol is external, we also store it by name. The linker will resolve the name to an address.
                                       } else {
-                                        program.Add(new Instruction("", "StoG " + (sym.Item5+4)));
+                                        program.Add(new Instruction("", "StoG " + (sym.Item5+3)));
                                       }
                                     }
                                     else {
