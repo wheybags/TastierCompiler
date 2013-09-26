@@ -8,11 +8,11 @@ all: bin/coco.exe doc/UserManual.pdf
 
 bin/coco.exe:
 	mkdir -p bin
-	curl http://www.ssw.uni-linz.ac.at/coco/CS/Coco.exe >> bin/coco.exe
+	curl http://www.ssw.uni-linz.ac.at/coco/CS/Coco.exe > bin/coco.exe
 
 doc/UserManual.pdf:
 	mkdir -p doc
-	curl http://ssw.jku.at/coco/Doc/UserManual.pdf >> doc/UserManual.pdf
+	curl http://ssw.jku.at/coco/Doc/UserManual.pdf > doc/UserManual.pdf
 
 clean:
 	rm -rf generated/
