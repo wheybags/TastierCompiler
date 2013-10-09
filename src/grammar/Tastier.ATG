@@ -76,7 +76,7 @@ COMPILER Tastier
                       Item4, -1 if procedure
 */
 
-  class Scope : Stack<Symbol> {}
+  class Scope : List<Symbol> {}
 
 /*
   A scope contains a stack of symbol definitions. Every time we come across
@@ -175,6 +175,23 @@ Symbol lookup(Stack<Scope> scopes, string name) {
     variableOffset = 0;
   }
   return null; // if the name wasn't found in any open scopes.
+}
+
+/* Ensures variables get placed at the start of Scope objects.
+ * This is necessary to ensure that variable addresses do not get polluted by
+ * procedures being created within the same scope (as addresses are generated
+ * from indexes in the scope, and procedures are also pushed onto the scope)*/
+
+void insertVar(Scope scope, string name, int type, int frame)
+{
+    int i;
+    for(i = scope.Count -1; i > -1; i--) {
+        if(scope[i].Item2 == (int)TastierKind.Var)
+            break;
+    }
+    i++;
+    
+    scope.Insert(i, new Symbol(name, (int)TastierKind.Var, type, frame, i));
 }
 
 /*
@@ -297,7 +314,7 @@ MulOp<out Instruction inst>
 ProcDecl                        (.  string name; Scope currentScope = openScopes.Peek(); int enterInstLocation = 0; bool external = false; .)
 = "void"
   Ident<out name>               (.
-                                    currentScope.Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, openScopes.Count, -1));
+                                    currentScope.Add(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, openScopes.Count, -1));
                                     openScopes.Push(new Scope());
                                     currentScope = openScopes.Peek();
                                 .)
@@ -546,16 +563,16 @@ VarDecl<bool external>          (.  string name; TastierType type; Scope current
 = Type<out type>
   Ident<out name>               (.
                                     if (external) {
-                                      externalDeclarations.Push(new Symbol(name, (int)TastierKind.Var, (int)type, 0, 0));
+                                      externalDeclarations.Add(new Symbol(name, (int)TastierKind.Var, (int)type, 0, 0));
                                     } else {
-                                      currentScope.Push(new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count));
+                                      insertVar(currentScope, name, (int)type, openScopes.Count -1);
                                     }
                                 .)
   { ',' Ident<out name>         (.
                                     if (external) {
-                                      externalDeclarations.Push(new Symbol(name, (int)TastierKind.Var, (int)type, 0, 0));
+                                      externalDeclarations.Add(new Symbol(name, (int)TastierKind.Var, (int)type, 0, 0));
                                     } else {
-                                      currentScope.Push(new Symbol(name, (int)TastierKind.Var, (int)type, openScopes.Count-1, currentScope.Count));
+                                      insertVar(currentScope, name, (int)type, openScopes.Count -1);
                                     }
                                 .)
   } ';'.
@@ -563,7 +580,7 @@ VarDecl<bool external>          (.  string name; TastierType type; Scope current
 ExternDecl                      (.  string name; bool external = true; Scope currentScope = openScopes.Peek(); int count = currentScope.Count; .)
 = "external"
   ( VarDecl<external>
-  | "procedure" Ident<out name> ";" (.  externalDeclarations.Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, 0, -1)); .)
+  | "procedure" Ident<out name> ";" (.  externalDeclarations.Add(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, 0, -1)); .)
   ).
 
 END Tastier.
