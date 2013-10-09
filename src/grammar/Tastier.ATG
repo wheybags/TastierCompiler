@@ -563,7 +563,7 @@ VarDecl<bool external>          (.  string name; TastierType type; Scope current
 ExternDecl                      (.  string name; bool external = true; Scope currentScope = openScopes.Peek(); int count = currentScope.Count; .)
 = "external"
   ( VarDecl<external>
-  | "procedure" Ident<out name> (.  externalDeclarations.Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, 0, -1)); .)
+  | "procedure" Ident<out name> ";" (.  externalDeclarations.Push(new Symbol(name, (int)TastierKind.Proc, (int)TastierType.Undefined, 0, -1)); .)
   ).
 
 END Tastier.
